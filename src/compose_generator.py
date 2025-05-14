@@ -29,13 +29,13 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
     try:
         logger.debug("Starting ComposeConfig build with raw inputs: %s", raw)
 
-        # 1) Mode
+        # Mode
         mode = raw.get('mode', '').lower()
         if mode not in ('clean', 'backup'):
             raise ConfigBuildError(f"Invalid mode: '{mode}'. Must be 'clean' or 'backup'.")
         logger.info("Mode set to: %s", mode)
 
-        # 2) Backup (if any)
+        # Backup (if any)
         backup: Optional[Backup] = None
         if mode == 'backup':
             backup_name = raw.get('backup_name')
@@ -46,7 +46,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             backup.validate()
             logger.info("Loaded backup: %s", backup.path)
 
-        # 3) Project (optional)
+        # Project (optional)
         project: Optional[Project] = None
         project_name = raw.get('project_name')
         if project_name:
@@ -55,7 +55,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             project.validate()
             logger.info("Loaded project: %s", project.path)
 
-        # 4) TagFile (optional)
+        # TagFile (optional)
         tag_file: Optional[TagFile] = None
         tag_name = raw.get('tag_name')
         if tag_name:
@@ -64,7 +64,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             tag_file.validate()
             logger.info("Loaded tag file: %s", tag_file.path)
 
-        # 5) Ports & other envs
+        # Ports & other envs
         try:
             http_port = int(raw.get('http_port', 8088))
             https_port = int(raw.get('https_port', 8043))
