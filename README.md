@@ -21,3 +21,5 @@ ignition-admin-panel/
 │   └── ignition-dev.log
 ├── requirements.txt         # PyQt5, Jinja2, docker (docker-py), PyYAML, etc.
 └── README.md                # Overview & quickstart
+
+
