@@ -1,4 +1,3 @@
-version: '4.40'
 services:
   ignition-dev:
     image: inductiveautomation/ignition:8.1.42
@@ -7,14 +6,19 @@ services:
       - "{{ http_port }}:8088"
       - "{{ https_port }}:8043"
     volumes:
+      # Always mount the data volume (read/write)
       - ign-data:/usr/local/bin/ignition/data
-      {% if mode=='backup' %}
+
+      {% if mode == 'backup' %}
+      # In backup mode, mount only the gateway backup
       - ./backups/{{ backup_file }}:/restore.gwbk:ro
+      {% else %}
+      # In clean mode, mount your entire projects folder so Ignition can scan and create .resources
+      - ./projects:/usr/local/bin/ignition/data/projects
       {% endif %}
-      {% if project_name %}
-      - ./projects/{{ project_name }}:/usr/local/bin/ignition/data/projects/{{ project_name }}:ro
-      {% endif %}
+
       {% if tag_file %}
+      # Tag import (optional) stays the same
       - ./tags/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
       {% endif %}
     environment:
@@ -26,9 +30,10 @@ services:
     command:
       - -n
       - {{ gateway_name }}
-      {% if mode=='backup' %}
+      {% if mode == 'backup' %}
       - -r
       - /restore.gwbk
       {% endif %}
 volumes:
   ign-data:
+

@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ignition Dev Gateway Admin Panel")
-        self.resize(800, 600)
+        self.resize(800, 800)
         self.file_watcher = None
 
         # Central widget & layout
@@ -58,17 +58,20 @@ class MainWindow(QMainWindow):
         self.backup_btn.clicked.connect(self._pick_backup)
         self.form.addRow("Backup (.gwbk):", self._hbox(self.backup_le, self.backup_btn))
 
+
         # Project ZIP picker
         self.project_le = QLineEdit()
         self.project_btn = QPushButton("Browse…")
         self.project_btn.clicked.connect(self._pick_project)
         self.form.addRow("Project ZIP:", self._hbox(self.project_le, self.project_btn))
 
+
         # Tag file picker
         self.tag_le = QLineEdit()
         self.tag_btn = QPushButton("Browse…")
         self.tag_btn.clicked.connect(self._pick_tag)
         self.form.addRow("Tag JSON/XML:", self._hbox(self.tag_le, self.tag_btn))
+
 
         # Ports & credentials
         self.http_le    = QLineEdit("8088")
@@ -135,6 +138,10 @@ class MainWindow(QMainWindow):
         is_backup = (mode == "backup")
         self.backup_le.setEnabled(is_backup)
         self.backup_btn.setEnabled(is_backup)
+        self.project_le.setEnabled(not is_backup)
+        self.project_btn.setEnabled(not is_backup)
+        self.tag_le.setEnabled(not is_backup)
+        self.tag_btn.setEnabled(not is_backup)
 
     def _pick_backup(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select Gateway Backup", str(BACKUPS_DIR), "Gateway Backup (*.gwbk)")
