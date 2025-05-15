@@ -1,4 +1,13 @@
+
 __pycache__/
 logs/
 venv/
 .vscode/
+
+# Ignore everything in projects and tags
+projects/*
+tags/*
+
+# Allow tracking of empty directories
+!projects/.gitkeep
+!tags/.gitkeep
