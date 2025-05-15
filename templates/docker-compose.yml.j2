@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  ignition-dev:
+    image: inductiveautomation/ignition:8.1.42
+    container_name: ignition-dev
+    ports:
+      - "{{ http_port }}:8088"
+      - "{{ https_port }}:8043"
+    volumes:
+      - ign-data:/usr/local/bin/ignition/data
+      {% if mode=='backup' %}
+      - ./backups/{{ backup_file }}:/restore.gwbk:ro
+      {% endif %}
+      {% if project_name %}
+      - ./projects/{{ project_name }}:/usr/local/bin/ignition/data/projects/{{ project_name }}:ro
+      {% endif %}
+      {% if tag_file %}
+      - ./tags/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
+      {% endif %}
+    environment:
+      - ACCEPT_IGNITION_EULA=Y
+      - GATEWAY_ADMIN_USERNAME={{ admin_user }}
+      - GATEWAY_ADMIN_PASSWORD={{ admin_pass }}
+      - IGNITION_EDITION={{ edition }}
+      - TZ={{ timezone }}
+    command:
+      - -n
+      - {{ gateway_name }}
+      {% if mode=='backup' %}
+      - -r
+      - /restore.gwbk
+      {% endif %}
+volumes:
+  ign-data:

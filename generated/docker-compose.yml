@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  ignition-dev:
+    image: inductiveautomation/ignition:8.1.42
+    container_name: ignition-dev
+    ports:
+      - "8088:8088"
+      - "8043:8043"
+    volumes:
+      - ign-data:/usr/local/bin/ignition/data
+      
+      
+      - ./projects/CCC_EOL_Test_2025-05-14_1719:/usr/local/bin/ignition/data/projects/CCC_EOL_Test_2025-05-14_1719:ro
+      
+      
+      - ./tags/CCC_RT_client-tags_f21d555f642947a9afd73499fbc495b8.xml:/usr/local/bin/ignition/data/init-tags.json:ro
+      
+    environment:
+      - ACCEPT_IGNITION_EULA=Y
+      - GATEWAY_ADMIN_USERNAME=admin
+      - GATEWAY_ADMIN_PASSWORD=default
+      - IGNITION_EDITION=standard
+      - TZ=America/Chicago
+    command:
+      - -n
+      - dev-gateway
+      
+volumes:
+  ign-data:

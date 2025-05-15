@@ -1,1 +1,4 @@
 PyQt5==5.15.11
+Jinja2
+docker
+PyYAML

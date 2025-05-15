@@ -9,12 +9,12 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QFileDialog, QComboBox,
     QTextEdit, QMessageBox
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QMetaObject
 
 # application modules
 from logging_config import setup_logging
 from utils import save_backup, save_tag_file, unzip_project, clear_generated
-from compose_generator import build_config
+from compose_generator import build_config, render_compose, render_env
 from docker_manager import DockerManager
 from errors import AppError, DockerManagerError
 
@@ -87,6 +87,10 @@ class MainWindow(QMainWindow):
         self.spin_btn.clicked.connect(self.on_spin_up)
         self.down_btn = QPushButton("Tear Down Gateway")
         self.down_btn.clicked.connect(self.on_tear_down)
+
+        # start with teardown disabled
+        self.down_btn.setEnabled(False)
+
         layout.addWidget(self.spin_btn)
         layout.addWidget(self.down_btn)
 
@@ -177,7 +181,6 @@ class MainWindow(QMainWindow):
             cfg = build_config(raw)
 
             # 4) Render compose & env
-            from compose_generator import render_compose, render_env
             compose_path = render_compose(cfg)      # writes generated/docker-compose.yml
             env_path     = render_env(cfg)          # writes generated/.env
 
@@ -188,15 +191,14 @@ class MainWindow(QMainWindow):
                 service_name='ignition-dev'
             )
             self.docker_mgr.up()
+            self.spin_btn.setEnabled(False)
+            self.down_btn.setEnabled(True)
+            self.log_console.append("Gateway started successfully.")
+            self.log_console.append("Waiting for logs…")
 
             # 6) Stream logs
             self.stop_evt = threading.Event()
-            def on_line(line):
-                # schedule append_log on the Qt thread
-                QApplication.instance().postEvent(
-                    self.log_console,
-                    lambda: self.append_log(line)
-                )
+
             self.log_thread = threading.Thread(
                 target=self.docker_mgr.stream_logs,
                 args=(self.append_log, self.stop_evt),
@@ -218,6 +220,13 @@ class MainWindow(QMainWindow):
                 self.docker_mgr.down()
             if self.log_thread:
                 self.log_thread.join(timeout=5)
+            self.down_btn.setEnabled(False)
+            self.spin_btn.setEnabled(True)
+            self.log_console.append("Gateway torn down successfully.")
+        except KeyboardInterrupt:
+            self.log_console.append("Tear down interrupted.")
+        except DockerManagerError as e:
+            QMessageBox.critical(self, "Error", str(e))
         except AppError as e:
             QMessageBox.critical(self, "Error", str(e))
         except Exception as e:
@@ -235,37 +244,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-# from docker_manager import DockerManager
-# import threading
-# from threading import Event
-# from errors import DockerManagerError
-
-# # After generating `docker-compose.yml` and `.env`…
-# dm = DockerManager(compose_file=Path('generated/docker-compose.yml'),
-#                    env_file=Path('generated/.env'),
-#                    service_name='ignition-dev')
-
-# # 1) Spin up
-# try:
-#     dm.up()
-# except DockerManagerError as e:
-#     show_error_dialog(str(e))
-#     return
-
-# # 2) Stream logs
-# stop_evt = Event()
-# def append_to_console(line: str):
-#     console_widget.append(line)
-
-# log_thread = threading.Thread(
-#     target=dm.stream_logs,
-#     args=(append_to_console, stop_evt),
-#     daemon=True
-# )
-# log_thread.start()
-
-# # On “Tear Down” button:
-# def on_tear_down():
-#     stop_evt.set()          # signal log thread to stop
-#     dm.down()
-#     log_thread.join(timeout=5)

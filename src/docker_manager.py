@@ -82,6 +82,8 @@ class DockerManager:
 
         # Read lines in a separate thread or in the calling thread
         try:
+            if proc.stdout is None:
+                raise DockerManagerError("Failed to capture logs: stdout is None")
             for line in proc.stdout:
                 clean = line.rstrip()
                 logger.debug("Log> %s", clean)

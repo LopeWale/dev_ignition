@@ -2,7 +2,6 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Literal, Tuple
 
-
 @dataclass
 class Backup:
     name: str
@@ -17,7 +16,6 @@ class Backup:
         if self.path.suffix.lower() != '.gwbk':
             raise ValueError(f"Invalid backup extension: {self.path.suffix}. Expected .gwbk")
 
-
 @dataclass
 class Project:
     name: str
@@ -25,16 +23,22 @@ class Project:
 
     def validate(self) -> None:
         """
-        Ensure the project folder exists and appears to contain an Ignition project.
+        Ensure the project folder contains an Ignition 8.1 project manifest (project.json).
+        Supports both direct export or a nested folder structure.
         """
-        if not self.path.is_dir():
-            raise FileNotFoundError(f"Project folder not found: {self.path}")
-        # Basic check: look for typical project subfolders
-        expected = ['Vision', 'Perspective', 'scripts']
-        missing = [d for d in expected if not (self.path / d).exists()]
-        if missing:
-            raise ValueError(f"Project '{self.name}' missing expected directories: {missing}")
-
+        # Check for top-level project.json
+        manifest = self.path / 'project.json'
+        if manifest.is_file():
+            return
+        # Check for a single nested folder containing project.json
+        subdirs = [d for d in self.path.iterdir() if d.is_dir()]
+        if len(subdirs) == 1:
+            nested_manifest = subdirs[0] / 'project.json'
+            if nested_manifest.is_file():
+                # Flatten path to nested folder
+                self.path = subdirs[0]
+                return
+        raise ValueError(f"Project '{self.name}' missing project.json manifest in {self.path}")
 
 @dataclass
 class TagFile:
@@ -57,7 +61,6 @@ class TagFile:
         """
         if not self.path.is_file():
             raise FileNotFoundError(f"Tag file not found: {self.path}")
-
 
 @dataclass
 class ComposeConfig:
