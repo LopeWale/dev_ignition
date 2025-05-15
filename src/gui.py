@@ -1,8 +1,11 @@
 # src/gui.py
 
+import socket
+import subprocess
 import sys
 import threading
 from pathlib import Path
+import typing
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFormLayout, QVBoxLayout,
@@ -10,6 +13,7 @@ from PyQt5.QtWidgets import (
     QTextEdit, QMessageBox
 )
 from PyQt5.QtCore import Qt, QMetaObject
+from PyQt5.QtGui import QCloseEvent
 
 # application modules
 from log_watcher import FileWatcher
@@ -87,14 +91,20 @@ class MainWindow(QMainWindow):
         # Buttons
         self.spin_btn = QPushButton("Spin Up Gateway")
         self.spin_btn.clicked.connect(self.on_spin_up)
+
         self.down_btn = QPushButton("Tear Down Gateway")
         self.down_btn.clicked.connect(self.on_tear_down)
+
+        # ← NEW: purge button
+        self.purge_btn = QPushButton("Purge All Docker Resources")
+        self.purge_btn.clicked.connect(self.on_purge_all)
 
         # start with teardown disabled
         self.down_btn.setEnabled(False)
 
         layout.addWidget(self.spin_btn)
         layout.addWidget(self.down_btn)
+        layout.addWidget(self.purge_btn) 
 
         # Log console
         self.log_console = QTextEdit()
@@ -146,11 +156,35 @@ class MainWindow(QMainWindow):
         # Must be invoked via Qt event loop
         self.log_console.append(line)
 
+    def find_free_port(self):
+        s = socket.socket()
+        s.bind(('', 0))
+        port = s.getsockname()[1]
+        s.close()
+        return port
+
+
+    def is_port_free(self, port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('127.0.0.1', port)) != 0
+
     def on_spin_up(self):
         """Spin up the Ignition dev gateway."""
         try:
             # 1) Prepare filesystem
             clear_generated()
+
+            if not self.http_le.text().strip():
+                http_port = self.find_free_port()
+                self.http_le.setText(str(http_port))
+            else:
+                http_port = int(self.http_le.text().strip())
+
+            if not self.is_port_free(http_port):
+                raise AppError(f"Host port {http_port} is already in use. Please choose another.")
+            https_port = int(self.https_le.text().strip())
+            if not self.is_port_free(https_port):
+                raise AppError(f"Host port {https_port} is already in use. Please choose another.")
 
             # 2) Save user inputs to known dirs
             mode = self.mode_cb.currentText()
@@ -193,7 +227,7 @@ class MainWindow(QMainWindow):
                 service_name='ignition-dev'
             )
             self.docker_mgr.up()
-            log_path = BASE_DIR / 'logs' / 'ignition-dev.log'
+            log_path = BASE_DIR / 'logs' / 'ignition-admin.log'
             self.file_watcher = FileWatcher(log_path, self.append_log)
             self.file_watcher.start()
             self.spin_btn.setEnabled(False)
@@ -238,6 +272,45 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
         except Exception as e:
             QMessageBox.critical(self, "Unexpected Error", str(e))
+
+    def on_purge_all(self):
+        reply = QMessageBox.question(
+            self, "Confirm Purge",
+            "This will remove all Docker containers, images, volumes, and networks. Continue?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            subprocess.run(
+                ["docker", "system", "prune", "-a", "-f", "--volumes"],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            QMessageBox.information(self, "Purge Complete",
+                                    "All Docker resources have been pruned.")
+        except Exception as e:
+            QMessageBox.critical(self, "Purge Failed", str(e))
+
+    def closeEvent(self, a0: typing.Optional[QCloseEvent]) -> None:
+        """
+        Prompt teardown if a gateway is running when the window is closed.
+        """
+        if self.docker_mgr:
+            resp = QMessageBox.question(
+                self, "Exit",
+                "A gateway is still running. Tear it down before exiting?",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            if resp == QMessageBox.Cancel:
+                if a0 is not None:
+                    a0.ignore()
+                return
+            if resp == QMessageBox.Yes:
+                self.on_tear_down()
+
+        # Call the base implementation (accepts by default)
+        super().closeEvent(a0)
 
 
 def main():

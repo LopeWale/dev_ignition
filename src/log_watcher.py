@@ -46,3 +46,4 @@ class FileWatcher:
                         time.sleep(self.poll)
         except Exception as e:
             logger.exception("Error watching log file")
+            self._stop.set()

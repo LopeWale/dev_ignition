@@ -3,8 +3,10 @@ import logging
 import sys
 from pathlib import Path
 
+from typing import Optional
+
 def setup_logging(
-    log_file: Path = None,
+    log_file: Optional[Path] = None,
     level: int = logging.DEBUG,
     fmt: str = '%(asctime)s %(levelname)s [%(name)s] %(message)s',
     datefmt: str = '%Y-%m-%d %H:%M:%S'
