@@ -13,7 +13,7 @@ services:
       - ./projects/CCC_EOL_Test_2025-05-14_1719:/usr/local/bin/ignition/data/projects/CCC_EOL_Test_2025-05-14_1719:ro
       
       
-      - ./tags/CCC_RT_client-tags_f21d555f642947a9afd73499fbc495b8.xml:/usr/local/bin/ignition/data/init-tags.json:ro
+      - ./tags/CCC_RT_client-tags.xml:/usr/local/bin/ignition/data/init-tags.json:ro
       
     environment:
       - ACCEPT_IGNITION_EULA=Y

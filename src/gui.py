@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QMetaObject
 
 # application modules
+from log_watcher import FileWatcher
 from logging_config import setup_logging
 from utils import save_backup, save_tag_file, unzip_project, clear_generated
 from compose_generator import build_config, render_compose, render_env
@@ -31,6 +32,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Ignition Dev Gateway Admin Panel")
         self.resize(800, 600)
+        self.file_watcher = None
 
         # Central widget & layout
         central = QWidget()
@@ -191,6 +193,9 @@ class MainWindow(QMainWindow):
                 service_name='ignition-dev'
             )
             self.docker_mgr.up()
+            log_path = BASE_DIR / 'logs' / 'ignition-dev.log'
+            self.file_watcher = FileWatcher(log_path, self.append_log)
+            self.file_watcher.start()
             self.spin_btn.setEnabled(False)
             self.down_btn.setEnabled(True)
             self.log_console.append("Gateway started successfully.")
@@ -223,6 +228,8 @@ class MainWindow(QMainWindow):
             self.down_btn.setEnabled(False)
             self.spin_btn.setEnabled(True)
             self.log_console.append("Gateway torn down successfully.")
+            if self.file_watcher:
+                self.file_watcher.stop()
         except KeyboardInterrupt:
             self.log_console.append("Tear down interrupted.")
         except DockerManagerError as e:
