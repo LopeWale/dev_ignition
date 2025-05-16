@@ -49,7 +49,7 @@ class DockerManager:
             logger.error("Compose up failed: %s", e.stderr.strip())
             raise DockerManagerError(f"'docker compose up' failed: {e.stderr.strip()}")
 
-    def wait_for_gateway(port, timeout=30):
+    def wait_for_gateway(self, port, timeout=30):
         url = f'http://localhost:{port}/main/system/status/Ping'
         end = time.time() + timeout
         while time.time() < end:

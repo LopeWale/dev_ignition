@@ -36,8 +36,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ignition Dev Gateway Admin Panel")
-        self.resize(1000, 800)
-        self.setMinimumSize(800, 600)
+        self.resize(800, 1000)
+        self.setMinimumSize(800, 800)
 
         # Central widget & layout
         central = QWidget()
@@ -52,12 +52,6 @@ class MainWindow(QMainWindow):
         self.mode_cb.addItems(["clean", "backup"])
         self.form.addRow("Gateway Mode:", self.mode_cb)
         self.mode_cb.currentTextChanged.connect(self._on_mode_change)
-
-        # Open gateway web browser
-        self.open_btn = QPushButton("Open Gateway")
-        self.open_btn.setEnabled(False)               # disabled until after spin-up
-        self.open_btn.clicked.connect(self.on_open_gateway)
-        layout.addWidget(self.open_btn)
 
         # Backup picker
         self.backup_le = QLineEdit()
@@ -178,22 +172,21 @@ class MainWindow(QMainWindow):
         self.log_console.append(line)
 
     def find_free_port(self):
-        s = socket.socket()
-        s.bind(('', 0))
-        port = s.getsockname()[1]
-        s.close()
-        return port
+        with socket.socket() as s:
+            s.bind(('', 0))
+            return s.getsockname()[1]
 
-    def is_port_free(self, port):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    def is_port_free(self, port, timeout=0.5):
+        with socket.socket() as s:
+            s.settimeout(timeout)
             return s.connect_ex(('127.0.0.1', port)) != 0
 
     def on_spin_up(self):
         """Spin up the Ignition dev gateway."""
         try:
-            # Prepare filesystem
-            clear_generated()
+            clear_generated()  # Prepare filesystem
 
+            # Check if ports are free
             if not self.http_le.text().strip():
                 http_port = self.find_free_port()
                 self.http_le.setText(str(http_port))
@@ -201,13 +194,9 @@ class MainWindow(QMainWindow):
                 http_port = int(self.http_le.text().strip())
 
             if not self.is_port_free(http_port):
-                raise AppError(f"Host port {http_port} is already in use. Please choose another.")
-            
-            https_port = int(self.https_le.text().strip())
-            if not self.is_port_free(https_port):
-                raise AppError(f"Host port {https_port} is already in use. Please choose another.")
+                raise AppError(f"Host port {http_port} is already in use.")
 
-            # 2) Save user inputs to known dirs
+            # Save user inputs to known dirs
             mode = self.mode_cb.currentText()
             raw = {
                 'mode': mode,

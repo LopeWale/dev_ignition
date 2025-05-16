@@ -6,19 +6,13 @@ services:
       - "{{ http_port }}:8088"
       - "{{ https_port }}:8043"
     volumes:
-      # Always mount the data volume (read/write)
       - ign-data:/usr/local/bin/ignition/data
-
       {% if mode == 'backup' %}
-      # In backup mode, mount only the gateway backup
       - ./backups/{{ backup_file }}:/restore.gwbk:ro
       {% else %}
-      # In clean mode, mount your entire projects folder so Ignition can scan and create .resources
       - ./projects:/usr/local/bin/ignition/data/projects
       {% endif %}
-
       {% if tag_file %}
-      # Tag import (optional) stays the same
       - ./tags/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
       {% endif %}
     environment:
@@ -29,15 +23,14 @@ services:
       - TZ={{ timezone }}
     command:
       - -n
-      - {{ gateway_name }}
+      - "{{ gateway_name }}"
       {% if mode == 'backup' %}
       - -r
       - /restore.gwbk
       {% endif %}
-      --
-      -Dwrapper.java.initmemory=512
-      # Allow unsigned modules for development purposes
-      -Dignition.allowunsignedmodules=true
+      - --  
+      - wrapper.java.initmemory=512
+      - Dignition.allowunsignedmodules=true
+
 volumes:
   ign-data:
-
