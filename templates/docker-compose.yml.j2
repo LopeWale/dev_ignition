@@ -1,6 +1,6 @@
 services:
   ignition-dev:
-    image: inductiveautomation/ignition:8.1.42
+    image: inductiveautomation/ignition:latest
     container_name: ignition-dev
     ports:
       - "{{ http_port }}:8088"
@@ -34,6 +34,10 @@ services:
       - -r
       - /restore.gwbk
       {% endif %}
+      --
+      -Dwrapper.java.initmemory=512
+      # Allow unsigned modules for development purposes
+      -Dignition.allowunsignedmodules=true
 volumes:
   ign-data:
 

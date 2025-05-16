@@ -3,9 +3,12 @@
 import subprocess
 import threading
 from pathlib import Path
+import time
 from typing import Callable, Optional
 
 import logging
+
+import requests
 
 from errors import DockerManagerError
 
@@ -46,6 +49,20 @@ class DockerManager:
             logger.error("Compose up failed: %s", e.stderr.strip())
             raise DockerManagerError(f"'docker compose up' failed: {e.stderr.strip()}")
 
+    def wait_for_gateway(port, timeout=30):
+        url = f'http://localhost:{port}/main/system/status/Ping'
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                r = requests.get(url, timeout=2)
+                if r.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            time.sleep(1)
+        return False
+
+    
     def down(self) -> None:
         """
         docker compose down -v
