@@ -13,8 +13,9 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QFileDialog, QComboBox,
     QTextEdit, QMessageBox
 )
-from PyQt5.QtCore import Qt, QMetaObject
-from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtGui import QPalette, QColor
+from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, QTimer
+from PyQt5.QtGui import QCloseEvent, QTextCursor
 
 # application modules
 from log_watcher import FileWatcher
@@ -167,9 +168,21 @@ class MainWindow(QMainWindow):
             self.tag_le.setText(path)
 
     def append_log(self, line: str):
-        """Thread-safe append to log console."""
-        # Must be invoked via Qt event loop
-        self.log_console.append(line)
+        """Thread-safe append to log console and auto-scroll to the bottom."""
+        # Append the line in the Qt event loop
+        QMetaObject.invokeMethod(
+            self.log_console,
+            "append",
+            Qt.ConnectionType.QueuedConnection,
+            Q_ARG(str, line)
+        )
+        # Use QTimer.singleShot to scroll after appending
+        def _scroll():
+            cursor = self.log_console.textCursor()
+            cursor.movePosition(QTextCursor.End)
+            self.log_console.setTextCursor(cursor)
+            self.log_console.ensureCursorVisible()
+        QTimer.singleShot(0, _scroll)
 
     def find_free_port(self):
         with socket.socket() as s:
@@ -288,9 +301,11 @@ class MainWindow(QMainWindow):
                     self.spin_btn.setEnabled(True)
                     self.down_btn.setEnabled(False)
 
+            
             threading.Thread(target=do_compose_up, daemon=True).start()
 
             # Update button states
+            self.open_btn.setEnabled(True)
             self.spin_btn.setEnabled(False)
             self.down_btn.setEnabled(True)
             self.log_console.append("Gateway is starting up…")
@@ -399,6 +414,24 @@ class MainWindow(QMainWindow):
 def main():
     setup_logging(log_file=BASE_DIR / 'logs' / 'ignition-admin.log')
     app = QApplication(sys.argv)
+    
+    dark = QPalette()
+    dark.setColor(QPalette.Window,        QColor(53, 53, 53))
+    dark.setColor(QPalette.WindowText,    QColor(255, 255, 255))
+    dark.setColor(QPalette.Base,          QColor(42, 42, 42))
+    dark.setColor(QPalette.AlternateBase, QColor(66, 66, 66))
+    dark.setColor(QPalette.ToolTipBase,   QColor(255, 255, 220))
+    dark.setColor(QPalette.ToolTipText,   QColor(255, 255, 255))
+    dark.setColor(QPalette.Text,          QColor(255, 255, 255))
+    dark.setColor(QPalette.Button,        QColor(53, 53, 53))
+    dark.setColor(QPalette.ButtonText,    QColor(255, 255, 255))
+    dark.setColor(QPalette.BrightText,    QColor(255, 0, 0))
+    dark.setColor(QPalette.Link,          QColor(42, 130, 218))
+    dark.setColor(QPalette.Highlight,     QColor(42, 130, 218))
+    dark.setColor(QPalette.HighlightedText, QColor(0, 0, 0))
+    app.setPalette(dark)
+    # --- end dark mode palette ---
+
     w = MainWindow()
     w.show()
     sys.exit(app.exec_())
