@@ -176,10 +176,24 @@ class MainWindow(QMainWindow):
             s.bind(('', 0))
             return s.getsockname()[1]
 
-    def is_port_free(self, port, timeout=0.5):
+    def is_port_free(self, port, timeout=10):
         with socket.socket() as s:
             s.settimeout(timeout)
             return s.connect_ex(('127.0.0.1', port)) != 0
+    
+    def start_log_stream(self):
+        """Begin tailing container logs after compose up."""
+        self.stop_evt = threading.Event()
+        if self.docker_mgr is not None:
+            self.log_thread = threading.Thread(
+                target=self.docker_mgr.stream_logs,
+                args=(self.append_log, self.stop_evt),
+                daemon=True
+            )
+            self.log_thread.start()
+            self.append_log("▶ Streaming container logs…")
+        else:
+            self.append_log("❌ Docker manager is not initialized. Cannot stream logs.")
 
     def on_spin_up(self):
         """Spin up the Ignition dev gateway."""
@@ -227,47 +241,59 @@ class MainWindow(QMainWindow):
             cfg = build_config(raw)
             compose_path = render_compose(cfg)      # writes generated/docker-compose.yml
             env_path     = render_env(cfg)          # writes generated/.env
+            self.log_console.append(f"Generated compose file: {compose_path}")
+            self.log_console.append(f"Generated env file: {env_path}")
+            self.log_console.append("Starting Docker containers…")
 
-            # Start Docker
+            # initialize the manager (with working_dir baked in if needed)
             self.docker_mgr = DockerManager(
                 compose_file=compose_path,
                 env_file=env_path,
-                service_name='ignition-dev'
+                service_name='ignition-dev',
+                working_dir=BASE_DIR
             )
-            self.docker_mgr.up()
 
-            # in on_spin_up(), after self.docker_mgr.up():
-            if self.docker_mgr.wait_for_gateway(http_port):
-                self.log_console.append("Gateway is up and responding on HTTP.")
-                self.open_btn.setEnabled(True)
-            else:
-                self.log_console.append("Gateway did not respond within timeout.")
-                # show a warning
-                QMessageBox.warning(self, "Warning", "Gateway did not respond within timeout.")
-                self.open_btn.setEnabled(False)
+            # Clear existing console and show progress
+            self.log_console.clear()
+            self.log_console.append("▶ Starting Docker Compose…")
+            # Run `docker compose up` in the foreground and stream its lines
+            def do_compose_up():
+                try:
+                    if self.docker_mgr is not None:
+                        self.docker_mgr.up_stream(self.append_log)
+                        self.append_log("✅ Compose up completed.")
+                    else:
+                        self.append_log("❌ Docker manager is not initialized.")
+                        QMessageBox.critical(self, "Docker Error", "Docker manager is not initialized.")
+                        return
+
+                    # Now fall back to HTTP readiness probe
+                    port = int(self.http_le.text().strip())
+                    if self.docker_mgr.wait_for_gateway(port):
+                        self.append_log("✔️ Gateway responded on HTTP.")
+                        self.open_btn.setEnabled(True)
+                    else:
+                        self.append_log("❗ Gateway did not respond within timeout.")
+                        QMessageBox.warning(self, "Warning",
+                            "Gateway did not respond within timeout.")
+                        self.open_btn.setEnabled(False)
+
+                    # After compose up, still start the container-log tail
+                    self.start_log_stream()
+
+                except DockerManagerError as e:
+                    self.append_log(f"❌ Compose up failed: {e}")
+                    QMessageBox.critical(self, "Docker Error", str(e))
+                    # revert button state
+                    self.spin_btn.setEnabled(True)
+                    self.down_btn.setEnabled(False)
+
+            threading.Thread(target=do_compose_up, daemon=True).start()
 
             # Update button states
             self.spin_btn.setEnabled(False)
             self.down_btn.setEnabled(True)
-            self.open_btn.setEnabled(True)
-
-            # Start file watcher for logs
-            log_path = BASE_DIR / 'logs' / 'ignition-admin.log'
-            self.file_watcher = FileWatcher(log_path, self.append_log)
-            self.file_watcher.start()
-
-            self.log_console.append("Gateway started successfully.")
-            self.log_console.append("Waiting for logs…")
-
-            # Stream logs
-            self.stop_evt = threading.Event()
-
-            self.log_thread = threading.Thread(
-                target=self.docker_mgr.stream_logs,
-                args=(self.append_log, self.stop_evt),
-                daemon=True
-            )
-            self.log_thread.start()
+            self.log_console.append("Gateway is starting up…")
 
         except AppError as e:
             QMessageBox.critical(self, "Error", str(e))
@@ -275,7 +301,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Unexpected Error", str(e))
     
     def on_open_gateway(self):
-        url = f"http://localhost:{self.http_le.text().strip()}"
+        url = f"http://localhost:{self.https_le.text().strip()}/web/"
         webbrowser.open_new_tab(url)
 
     def on_tear_down(self):

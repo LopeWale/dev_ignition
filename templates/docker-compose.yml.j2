@@ -7,13 +7,18 @@ services:
       - "{{ https_port }}:8043"
     volumes:
       - ign-data:/usr/local/bin/ignition/data
+      # new: map host ./logs to the gateway’s logs folder
+      - {{ logs_dir }}:/usr/local/bin/ignition/data/logs
+
       {% if mode == 'backup' %}
-      - ./backups/{{ backup_file }}:/restore.gwbk:ro
+      - {{ projects_dir }}/../backups/{{ backup_file }}:/restore.gwbk:ro
       {% else %}
-      - ./projects:/usr/local/bin/ignition/data/projects
+      # Mount the host’s real projects folder:
+      - {{ projects_dir }}:/usr/local/bin/ignition/data/projects:rw
       {% endif %}
+
       {% if tag_file %}
-      - ./tags/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
+      - {{ tags_dir }}/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
       {% endif %}
     environment:
       - ACCEPT_IGNITION_EULA=Y
@@ -21,6 +26,7 @@ services:
       - GATEWAY_ADMIN_PASSWORD={{ admin_pass }}
       - IGNITION_EDITION={{ edition }}
       - TZ={{ timezone }}
+      - DISABLE_QUICKSTART=true
     command:
       - -n
       - "{{ gateway_name }}"

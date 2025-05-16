@@ -75,7 +75,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
         if not admin_user or not admin_pass:
             raise ConfigBuildError("Admin username and password must be provided.")
         if not gateway_name:
-            raise ConfigBuildError("Gateway name must be provided.")
+            raise ConfigBuildError("Gateway name cannot be empty.")
 
         # ComposeConfig object
         cfg = ComposeConfig(
@@ -104,7 +104,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
 
 def render_compose(cfg: ComposeConfig) -> Path:
     """
-    Render docker-compose.yml from template.
+    Render docker-compose.yml from template, using absolute host paths for mounts.
     """
     try:
         GENERATED_DIR.mkdir(parents=True, exist_ok=True)
@@ -113,12 +113,22 @@ def render_compose(cfg: ComposeConfig) -> Path:
             autoescape=select_autoescape(['j2'])
         )
         template = env.get_template('docker-compose.yml.j2')
-        content = template.render(**cfg.to_dict())
 
+        # Prepare context with absolute host directories
+        context = cfg.to_dict()
+        context.update({
+            'projects_dir': str(BASE_DIR / 'projects'),
+            'tags_dir':     str(BASE_DIR / 'tags'),
+            'backups_dir':  str(BASE_DIR / 'backups'),
+            'logs_dir':     str(BASE_DIR / 'logs'),
+        })
+
+        content = template.render(**context)
         out_path = GENERATED_DIR / 'docker-compose.yml'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered compose file to %s", out_path)
         return out_path
+
     except Exception as e:
         logger.exception("Failed to render docker-compose.yml")
         raise ConfigBuildError(f"Compose template rendering error: {e}", underlying=e)
@@ -136,15 +146,27 @@ def render_env(cfg: ComposeConfig) -> Path:
         )
         template = env.get_template('.env.j2')
         content = template.render(**cfg.to_dict())
-
         out_path = GENERATED_DIR / '.env'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered env file to %s", out_path)
         return out_path
+
     except Exception as e:
         logger.exception("Failed to render .env file")
         raise ConfigBuildError(f"Env template rendering error: {e}", underlying=e)
-    
+
+def cleanup_generated_files() -> None:
+    """
+    Remove all files in the generated directory.
+    """
+    try:
+        for file in GENERATED_DIR.iterdir():
+            if file.is_file():
+                file.unlink()
+        logger.info("Cleaned up generated files in %s", GENERATED_DIR)
+    except Exception as e:
+        logger.exception("Failed to clean up generated files")
+        raise ConfigBuildError(f"Cleanup error: {e}", underlying=e)
 
 # The following code is commented out as it is not used in the current context. - 5/15/2025
 
