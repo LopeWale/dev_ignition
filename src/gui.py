@@ -430,7 +430,64 @@ def main():
     dark.setColor(QPalette.Highlight,     QColor(42, 130, 218))
     dark.setColor(QPalette.HighlightedText, QColor(0, 0, 0))
     app.setPalette(dark)
-    # --- end dark mode palette ---
+    app.setStyle("Fusion")
+    app.setStyleSheet("""
+        /* Background for all QWidgets */
+        QWidget {
+          background-color: #2b2b2b;
+          color: #dddddd;
+        }
+
+        /* Line edits & text areas */
+        QLineEdit, QTextEdit {
+          background-color: #3c3c3c;
+          border: 1px solid #555555;
+          border-radius: 4px;
+          padding: 4px;
+          color: #ffffff;
+        }
+
+        /* ComboBoxes */
+        QComboBox {
+          background-color: #3c3c3c;
+          border: 1px solid #555555;
+          border-radius: 4px;
+          padding: 2px 6px;
+          color: #ffffff;
+        }
+
+        /* Buttons */
+        QPushButton {
+          background-color: #5c5c5c;
+          border: 1px solid #444444;
+          border-radius: 4px;
+          padding: 6px 12px;
+        }
+        QPushButton:hover {
+          background-color: #6d6d6d;
+        }
+        QPushButton:pressed {
+          background-color: #4a4a4a;
+        }
+        QPushButton:disabled {
+          background-color: #3b3b3b;
+          color: #777777;
+        }
+
+        /* Scrollbars */
+        QScrollBar:vertical {
+          background: #2b2b2b;
+          width: 12px;
+          margin: 0px;
+        }
+        QScrollBar::handle:vertical {
+          background: #555555;
+          min-height: 20px;
+        }
+        QScrollBar::handle:vertical:hover {
+          background: #666666;
+        }
+    """)
 
     w = MainWindow()
     w.show()
