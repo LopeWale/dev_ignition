@@ -1,0 +1,56 @@
+# templates/docker-compose.yml.j2
+
+services:
+  ignition-dev:
+    image: inductiveautomation/ignition:latest
+    container_name: ignition-dev
+
+    # Allow container to reach host network services (e.g. Ethernet‐connected devices)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Map the Gateway HTTP/HTTPS ports
+    ports:
+      - "8089:8088"
+      - "8043:8043"
+
+    # Persist data and mount projects or backups & tags
+    volumes:
+      # Core data volume (writable)
+      - ign-data:/usr/local/bin/ignition/data
+
+      
+      # In backup mode, mount just the .gwbk for auto-restore
+      - C:\Users\eakinwale\Downloads\dev_ignition\backups/dev-gateway_Ignition-backup-20250520-1056.gwbk:/restore.gwbk:ro
+      
+
+      
+
+      # Expose the Gateway’s own log folder for later inspection or tailing
+      - C:\Users\eakinwale\Downloads\dev_ignition\logs:/usr/local/bin/ignition/data/logs
+
+    
+
+    environment:
+      - ACCEPT_IGNITION_EULA=Y
+      - GATEWAY_ADMIN_USERNAME=admin
+      - GATEWAY_ADMIN_PASSWORD=default
+      - IGNITION_EDITION=standard
+      - TZ=America/Chicago
+
+      
+
+    command:
+      - -n
+      - "dev-gateway"
+      
+      - -r
+      - /restore.gwbk
+      
+      # Signal the wrapper args
+      - --
+      - wrapper.java.initmemory=512
+      - wrapper.ignition.allowunsignedmodules=true
+
+volumes:
+  ign-data:

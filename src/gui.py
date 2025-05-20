@@ -45,7 +45,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.form = QFormLayout()
         layout = QVBoxLayout()
-        layout.addLayout(self.form)
         central.setLayout(layout)
 
         # Mode selector
@@ -76,7 +75,7 @@ class MainWindow(QMainWindow):
 
 
         # Ports & credentials
-        self.http_le    = QLineEdit("8088")
+        self.http_le    = QLineEdit("8089")
         self.https_le   = QLineEdit("8043")
         self.admin_le   = QLineEdit("admin")
         self.pass_le    = QLineEdit()
@@ -92,6 +91,29 @@ class MainWindow(QMainWindow):
         self.form.addRow("Gateway Name:", self.gateway_le)
         self.form.addRow("Edition:", self.edition_le)
         self.form.addRow("Timezone:", self.tz_le)
+
+        # Connection Type selector
+        self.conn_type_cb = QComboBox()
+        self.conn_type_cb.addItems(["Ethernet", "Serial"])
+        self.form.addRow("Device Connection:", self.conn_type_cb)
+        self.conn_type_cb.currentTextChanged.connect(self._on_conn_change)
+
+        # Ethernet fields
+        self.dev_ip_le   = QLineEdit()
+        self.dev_port_le = QLineEdit()
+        self.form.addRow("Device IP:",   self.dev_ip_le)
+        self.form.addRow("Device Port:", self.dev_port_le)
+
+        # Serial fields
+        self.com_le      = QLineEdit()
+        self.baud_le     = QLineEdit()
+        self.form.addRow("Serial Port:",     self.com_le)
+        self.form.addRow("Serial Baudrate:", self.baud_le)
+
+        # Initialize showing only Ethernet by default
+        self._on_conn_change(self.conn_type_cb.currentText())
+        layout.addLayout(self.form)
+        central.setLayout(layout)
 
         # Buttons
         self.spin_btn = QPushButton("Spin Up Gateway")
@@ -208,6 +230,30 @@ class MainWindow(QMainWindow):
         else:
             self.append_log("❌ Docker manager is not initialized. Cannot stream logs.")
 
+    def _on_conn_change(self, mode: str):
+        """Show IP fields or COM fields depending on connection type."""
+        is_eth = (mode == "Ethernet")
+
+        # show Ethernet rows
+        self.dev_ip_le     .setVisible(is_eth)
+        self.dev_port_le   .setVisible(is_eth)
+
+        # hide Serial rows
+        self.com_le        .setVisible(not is_eth)
+        self.baud_le       .setVisible(not is_eth)
+
+    def _gather_connection(self, raw: dict):
+        """When building the raw dict, add only the relevant keys."""
+        conn = self.conn_type_cb.currentText().lower()
+        raw['conn_type'] = conn
+        if conn == 'ethernet':
+            raw['device_ip']    = self.dev_ip_le.text().strip()
+            raw['device_port']  = self.dev_port_le.text().strip()
+        else:
+            raw['com_port']     = self.com_le.text().strip()
+            raw['baud_rate']    = self.baud_le.text().strip()
+
+
     def on_spin_up(self):
         """Spin up the Ignition dev gateway."""
         try:
@@ -238,6 +284,9 @@ class MainWindow(QMainWindow):
                 'edition': self.edition_le.text(),
                 'timezone': self.tz_le.text(),
             }
+
+            # Gather connection info
+            self._gather_connection(raw)
 
             # backup/project/tag handling
             if mode == 'backup':
@@ -316,7 +365,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Unexpected Error", str(e))
     
     def on_open_gateway(self):
-        url = f"http://localhost:{self.https_le.text().strip()}/web/"
+        url = f"http://localhost:{self.http_le.text().strip()}/web/"
         webbrowser.open_new_tab(url)
 
     def on_tear_down(self):

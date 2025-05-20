@@ -1,32 +1,59 @@
+# templates/docker-compose.yml.j2
+
 services:
   ignition-dev:
     image: inductiveautomation/ignition:latest
     container_name: ignition-dev
+
+    # Allow container to reach host network services (e.g. Ethernet‐connected devices)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Map the Gateway HTTP/HTTPS ports
     ports:
       - "{{ http_port }}:8088"
       - "{{ https_port }}:8043"
+
+    # Persist data and mount projects or backups & tags
     volumes:
+      # Core data volume (writable)
       - ign-data:/usr/local/bin/ignition/data
-      # new: map host ./logs to the gateway’s logs folder
-      - {{ logs_dir }}:/usr/local/bin/ignition/data/logs
 
       {% if mode == 'backup' %}
-      - {{ projects_dir }}/../backups/{{ backup_file }}:/restore.gwbk:ro
+      # In backup mode, mount just the .gwbk for auto-restore
+      - {{ backups_dir }}/{{ backup_file }}:/restore.gwbk:ro
       {% else %}
-      # Mount the host’s real projects folder:
-      - {{ projects_dir }}:/usr/local/bin/ignition/data/projects:rw
+      # In clean mode, mount your real projects directory (allows .resources)
+      - {{ projects_dir }}:/usr/local/bin/ignition/data/projects
       {% endif %}
 
       {% if tag_file %}
+      # Optional initial tags import
       - {{ tags_dir }}/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
       {% endif %}
+
+      # Expose the Gateway’s own log folder for later inspection or tailing
+      - {{ logs_dir }}:/usr/local/bin/ignition/data/logs
+
+    {% if conn_type == 'serial' %}
+    # If using a serial-connected device, map the host COM port into the container
+    devices:
+      - "{{ com_port }}:{{ com_port }}"
+    {% endif %}
+
     environment:
       - ACCEPT_IGNITION_EULA=Y
       - GATEWAY_ADMIN_USERNAME={{ admin_user }}
       - GATEWAY_ADMIN_PASSWORD={{ admin_pass }}
       - IGNITION_EDITION={{ edition }}
       - TZ={{ timezone }}
-      - DISABLE_QUICKSTART=true
+
+      {% if conn_type == 'ethernet' %}
+      # Pass‐through for Ethernet‐connected device IP/port
+      - DEVICE_HOST={{ device_ip }}
+      - DEVICE_PORT={{ device_port }}
+      {% endif %}
+
     command:
       - -n
       - "{{ gateway_name }}"
@@ -34,9 +61,10 @@ services:
       - -r
       - /restore.gwbk
       {% endif %}
-      - --  
+      # Signal the wrapper args
+      - --
       - wrapper.java.initmemory=512
-      - Dignition.allowunsignedmodules=true
+      - wrapper.ignition.allowunsignedmodules=true
 
 volumes:
   ign-data:
