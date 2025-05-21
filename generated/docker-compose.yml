@@ -21,7 +21,7 @@ services:
 
       
       # In backup mode, mount just the .gwbk for auto-restore
-      - C:\Users\eakinwale\Downloads\dev_ignition\backups/dev-gateway_Ignition-backup-20250520-1056.gwbk:/restore.gwbk:ro
+      - C:\Users\eakinwale\Downloads\dev_ignition\backups/backup_with_controller_device_setup.gwbk:/restore.gwbk:ro
       
 
       
