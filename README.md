@@ -13,6 +13,7 @@ Easily restore backups, import projects and tags, and manage your development en
 - **Import and unzip projects** into the correct Ignition structure
 - **Load tag exports** (`.json` or `.xml`)
 - **Auto-generate Docker Compose and `.env` files** from GUI inputs
+- **Hardened Docker provisioning** with persistent data volumes, optional module/JDBC mounts, and automatic detection of activation or license secrets
 - **Stream and view logs** (gateway + container) in real time
 - **Tear down or purge Docker resources** with one click
 - **Dark-themed, user-friendly PyQt5 interface**
@@ -39,6 +40,9 @@ ignition-admin-panel/
 ├── generated/               # Rendered artifacts (overwritten each run)
 │   ├── docker-compose.yml
 │   └── .env                 # generated .env file if used
+├── modules/                 # Optional third-party Ignition modules (.modl)
+├── jdbc/                    # Optional third-party JDBC drivers (.jar)
+├── secrets/                 # Optional activation-token / license-key files
 ├── src/                     # Application source code
 │   ├── gui.py               # PyQt5 entrypoint & widgets
 │   ├── compose_generator.py # Renders Jinja2 → generated/
@@ -61,3 +65,23 @@ ignition-admin-panel/
    ```bash
    git clone (https://github.com/LopeWale/dev_ignition.git)
    cd ignition-admin-panel
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Launch the GUI:
+   ```bash
+   python src/gui.py
+   ```
+
+---
+
+## Advanced Docker configuration
+
+- **Persistent gateway data** – The generated Compose file mounts Ignition's runtime data to `/data` by default, following the community recommendation for resilient upgrades and container rebuilds. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-persist-gateway-data)
+- **Drop-in modules** – Place signed `.modl` packages in the `modules/` folder (or point the UI at a custom directory) to bind-mount `/modules` and enable curated module sets with `GATEWAY_MODULES_ENABLED`. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-enable-disable-default-modules)
+- **Drop-in JDBC drivers** – Add JDBC `.jar` files to `jdbc/` to bind-mount `/jdbc` and automatically link custom drivers before gateway start-up. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-integrate-third-party-jdbc-drivers)
+- **Secrets-aware licensing** – Store activation tokens or license keys in `secrets/activation-token` and `secrets/license-key`. They will be mounted read-only and injected into the container via `IGNITION_ACTIVATION_TOKEN_FILE` / `IGNITION_LICENSE_KEY_FILE` so sensitive values stay out of Compose files.
+- **Custom runtime identities** – Provide optional `IGNITION_UID` / `IGNITION_GID` values to match host ownership when bind-mounting data directories or secrets.
+- **Cross-platform volume mounts** – Generated Compose files now emit long-form volume syntax and pre-create bind-mount directories so host paths resolve cleanly across Linux, macOS, and Windows workstations.
