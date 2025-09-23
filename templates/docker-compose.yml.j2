@@ -1,58 +1,88 @@
 # templates/docker-compose.yml.j2
 
+version: "3.9"
+
 services:
   ignition-dev:
-    image: inductiveautomation/ignition:latest
+    image: {{ image_repo }}:{{ image_tag }}
     container_name: ignition-dev
+    restart: unless-stopped
 
-    # Allow container to reach host network services (e.g. Ethernet‐connected devices)
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    # Map the Gateway HTTP/HTTPS ports
+    env_file:
+      - .env
+
+    environment:
+      ACCEPT_IGNITION_EULA: ${ACCEPT_IGNITION_EULA:-Y}
+      GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD}
+      IGNITION_EDITION: ${IGNITION_EDITION}
+      TZ: ${TZ}
+      {% if gateway_modules_enabled %}
+      GATEWAY_MODULES_ENABLED: ${GATEWAY_MODULES_ENABLED}
+      {% endif %}
+      {% if gateway_module_relink %}
+      GATEWAY_MODULE_RELINK: ${GATEWAY_MODULE_RELINK}
+      {% endif %}
+      {% if gateway_jdbc_relink %}
+      GATEWAY_JDBC_RELINK: ${GATEWAY_JDBC_RELINK}
+      {% endif %}
+      {% if ignition_uid is not none %}
+      IGNITION_UID: ${IGNITION_UID}
+      {% endif %}
+      {% if ignition_gid is not none %}
+      IGNITION_GID: ${IGNITION_GID}
+      {% endif %}
+      {% if activation_token_container_path %}
+      IGNITION_ACTIVATION_TOKEN_FILE: ${IGNITION_ACTIVATION_TOKEN_FILE}
+      {% endif %}
+      {% if license_key_container_path %}
+      IGNITION_LICENSE_KEY_FILE: ${IGNITION_LICENSE_KEY_FILE}
+      {% endif %}
+      {% if conn_type == 'ethernet' and device_ip %}
+      DEVICE_HOST: "{{ device_ip }}"
+      {% endif %}
+      {% if conn_type == 'ethernet' and device_port %}
+      DEVICE_PORT: "{{ device_port }}"
+      {% endif %}
+      {% if conn_type == 'serial' and baud_rate %}
+      SERIAL_BAUD: "{{ baud_rate }}"
+      {% endif %}
+      {% if mode == 'backup' %}
+      GATEWAY_AUTO_RESTORE_ENABLED: "true"
+      {% endif %}
+
     ports:
       - "{{ http_port }}:8088"
       - "{{ https_port }}:8043"
 
-    # Persist data and mount projects or backups & tags
     volumes:
-      # Core data volume (writable)
-      - ign-data:/usr/local/bin/ignition/data
-
+      - {{ data_mount_source }}:{{ data_mount_target }}
       {% if mode == 'backup' %}
-      # In backup mode, mount just the .gwbk for auto-restore
       - {{ backups_dir }}/{{ backup_file }}:/restore.gwbk:ro
       {% else %}
-      # In clean mode, mount your real projects directory (allows .resources)
       - {{ projects_dir }}:/usr/local/bin/ignition/data/projects
       {% endif %}
-
       {% if tag_file %}
-      # Optional initial tags import
       - {{ tags_dir }}/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
       {% endif %}
-
-      # Expose the Gateway’s own log folder for later inspection or tailing
       - {{ logs_dir }}:/usr/local/bin/ignition/data/logs
+      {% if modules_mount %}
+      - {{ modules_mount }}:/modules
+      {% endif %}
+      {% if jdbc_mount %}
+      - {{ jdbc_mount }}:/jdbc
+      {% endif %}
+      {% for secret in secret_mounts %}
+      - {{ secret.source }}:{{ secret.target }}:ro
+      {% endfor %}
 
-    {% if conn_type == 'serial' %}
-    # If using a serial-connected device, map the host COM port into the container
+    {% if conn_type == 'serial' and com_port %}
     devices:
       - "{{ com_port }}:{{ com_port }}"
     {% endif %}
-
-    environment:
-      - ACCEPT_IGNITION_EULA=Y
-      - GATEWAY_ADMIN_USERNAME={{ admin_user }}
-      - GATEWAY_ADMIN_PASSWORD={{ admin_pass }}
-      - IGNITION_EDITION={{ edition }}
-      - TZ={{ timezone }}
-
-      {% if conn_type == 'ethernet' %}
-      # Pass‐through for Ethernet‐connected device IP/port
-      - DEVICE_HOST={{ device_ip }}
-      - DEVICE_PORT={{ device_port }}
-      {% endif %}
 
     command:
       - -n
@@ -61,10 +91,11 @@ services:
       - -r
       - /restore.gwbk
       {% endif %}
-      # Signal the wrapper args
       - --
       - wrapper.java.initmemory=512
       - wrapper.ignition.allowunsignedmodules=true
 
+{% if data_volume_name %}
 volumes:
-  ign-data:
+  {{ data_volume_name }}:
+{% endif %}
