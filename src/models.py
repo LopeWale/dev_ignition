@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, Literal, Tuple
+from typing import Optional, Literal
 
 @dataclass
 class Backup:
@@ -75,6 +75,25 @@ class ComposeConfig:
     gateway_name: str
     edition: str = 'standard'
     timezone: str = 'America/Chicago'
+    conn_type: Literal['ethernet', 'serial'] = 'ethernet'
+    device_ip: Optional[str] = None
+    device_port: Optional[str] = None
+    com_port: Optional[str] = None
+    baud_rate: Optional[str] = None
+    image_repo: str = 'inductiveautomation/ignition'
+    image_tag: str = 'latest'
+    data_mount_source: str = 'ignition-data'
+    data_mount_type: Literal['volume', 'bind'] = 'volume'
+    data_mount_target: str = '/data'
+    modules_dir: Optional[Path] = None
+    jdbc_dir: Optional[Path] = None
+    gateway_modules_enabled: Optional[str] = None
+    gateway_module_relink: bool = False
+    gateway_jdbc_relink: bool = False
+    ignition_uid: Optional[int] = None
+    ignition_gid: Optional[int] = None
+    activation_token_file: Optional[Path] = None
+    license_key_file: Optional[Path] = None
 
     def validate(self) -> None:
         """
@@ -106,12 +125,53 @@ class ComposeConfig:
             raise ValueError("Admin password cannot be empty.")
         if not self.gateway_name:
             raise ValueError("Gateway name cannot be empty.")
+        if self.conn_type not in ('ethernet', 'serial'):
+            raise ValueError(
+                f"Invalid connection type '{self.conn_type}'."
+            )
+        if self.conn_type == 'ethernet':
+            if self.device_ip and not self.device_port:
+                raise ValueError("Device port must be provided when device IP is set.")
+        if self.conn_type == 'serial' and not self.com_port:
+            raise ValueError("Serial connections require a COM port to be specified.")
+        if self.data_mount_type not in ('volume', 'bind'):
+            raise ValueError(
+                f"Invalid data_mount_type '{self.data_mount_type}'. Use 'volume' or 'bind'."
+            )
+        if self.data_mount_type == 'bind':
+            data_source_path = Path(self.data_mount_source).expanduser()
+            if not data_source_path.exists():
+                raise FileNotFoundError(
+                    f"Data mount source not found: {data_source_path}"
+                )
+            if not data_source_path.is_dir():
+                raise ValueError(
+                    f"Data mount source must be a directory: {data_source_path}"
+                )
+        for folder, label in (
+            (self.modules_dir, 'Modules directory'),
+            (self.jdbc_dir, 'JDBC directory'),
+        ):
+            if folder and not folder.exists():
+                raise FileNotFoundError(f"{label} not found: {folder}")
+        for file_path, label in (
+            (self.activation_token_file, 'Activation token file'),
+            (self.license_key_file, 'License key file'),
+        ):
+            if file_path and not file_path.is_file():
+                raise FileNotFoundError(f"{label} not found: {file_path}")
+        for value, label in (
+            (self.ignition_uid, 'IGNITION_UID'),
+            (self.ignition_gid, 'IGNITION_GID'),
+        ):
+            if value is not None and value < 0:
+                raise ValueError(f"{label} must be a positive integer.")
 
     def to_dict(self) -> dict:
         """
         Serialize config for templating.
         """
-        return {
+        data = {
             'mode': self.mode,
             'backup_file': self.backup.name if self.backup else None,
             'project_name': self.project.name if self.project else None,
@@ -123,4 +183,26 @@ class ComposeConfig:
             'gateway_name': self.gateway_name,
             'edition': self.edition,
             'timezone': self.timezone,
+            'conn_type': self.conn_type,
+            'device_ip': self.device_ip,
+            'device_port': self.device_port,
+            'com_port': self.com_port,
+            'baud_rate': self.baud_rate,
+            'image_repo': self.image_repo,
+            'image_tag': self.image_tag,
+            'data_mount_source': self.data_mount_source,
+            'data_mount_type': self.data_mount_type,
+            'data_mount_target': self.data_mount_target,
+            'gateway_modules_enabled': self.gateway_modules_enabled,
+            'gateway_module_relink': self.gateway_module_relink,
+            'gateway_jdbc_relink': self.gateway_jdbc_relink,
+            'ignition_uid': self.ignition_uid,
+            'ignition_gid': self.ignition_gid,
+            'activation_token_file': str(self.activation_token_file) if self.activation_token_file else None,
+            'license_key_file': str(self.license_key_file) if self.license_key_file else None,
         }
+        if self.modules_dir:
+            data['modules_dir'] = str(self.modules_dir)
+        if self.jdbc_dir:
+            data['jdbc_dir'] = str(self.jdbc_dir)
+        return data

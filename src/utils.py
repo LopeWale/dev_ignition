@@ -11,12 +11,15 @@ BACKUPS_DIR    = BASE_DIR / 'backups'
 PROJECTS_DIR   = BASE_DIR / 'projects'
 TAGS_DIR       = BASE_DIR / 'tags'
 GENERATED_DIR  = BASE_DIR / 'generated'
+MODULES_DIR    = BASE_DIR / 'modules'
+JDBC_DIR       = BASE_DIR / 'jdbc'
+SECRETS_DIR    = BASE_DIR / 'secrets'
 
 def ensure_directories():
     """
     Create the core directories if they don't exist.
     """
-    for d in (BACKUPS_DIR, PROJECTS_DIR, TAGS_DIR, GENERATED_DIR):
+    for d in (BACKUPS_DIR, PROJECTS_DIR, TAGS_DIR, GENERATED_DIR, MODULES_DIR, JDBC_DIR, SECRETS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 def save_backup(src_path: str) -> str:
