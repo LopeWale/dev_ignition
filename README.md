@@ -77,6 +77,28 @@ ignition-admin-panel/
 
 ---
 
+## HTTP API (Preview)
+
+The groundwork for the future web application now includes a FastAPI-powered service layer. It exposes environment lifecycle operations so the forthcoming SPA can provision gateways over HTTP.
+
+1. Install dependencies (includes FastAPI, Uvicorn, and pytest for the new service):
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Launch the API locally:
+   ```bash
+   uvicorn api.server:app --reload
+   ```
+3. Explore the interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs). Key endpoints:
+   - `POST /api/environments` – render Compose and `.env` artifacts for a new gateway definition.
+   - `GET /api/environments` – list provisioned environments and their generated file locations.
+   - `GET /api/environments/{id}` – retrieve a detailed, sanitised view of an environment.
+   - `DELETE /api/environments/{id}` – remove generated artifacts for a retired environment.
+
+Generated files are written beneath `generated/environments/<id>/` so each environment remains isolated. Metadata is tracked in `generated/environments/registry.json` and excludes sensitive values like admin passwords.
+
+---
+
 ## Advanced Docker configuration
 
 - **Persistent gateway data** – The generated Compose file mounts Ignition's runtime data to `/data` by default, following the community recommendation for resilient upgrades and container rebuilds. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-persist-gateway-data)

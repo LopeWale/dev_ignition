@@ -317,11 +317,12 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
         raise ConfigBuildError(str(e), underlying=e)
 
 
-def render_compose(cfg: ComposeConfig) -> Path:
-    """Render docker-compose.yml from template, using absolute host paths."""
+def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
+    """Render docker-compose.yml from template into the requested output directory."""
 
     try:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        target_dir = output_dir or GENERATED_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
         env = Environment(
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             autoescape=select_autoescape(['j2'])
@@ -410,7 +411,7 @@ def render_compose(cfg: ComposeConfig) -> Path:
             )
 
         content = template.render(**context)
-        out_path = GENERATED_DIR / 'docker-compose.yml'
+        out_path = target_dir / 'docker-compose.yml'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered compose file to %s", out_path)
         return out_path
@@ -422,11 +423,12 @@ def render_compose(cfg: ComposeConfig) -> Path:
         )
 
 
-def render_env(cfg: ComposeConfig) -> Path:
-    """Render .env file from template."""
+def render_env(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
+    """Render .env file from template into the requested output directory."""
 
     try:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        target_dir = output_dir or GENERATED_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
         env = Environment(
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             autoescape=False
@@ -440,7 +442,7 @@ def render_env(cfg: ComposeConfig) -> Path:
             context['license_key_file'] = LICENSE_KEY_CONTAINER_PATH
 
         content = template.render(**context)
-        out_path = GENERATED_DIR / '.env'
+        out_path = target_dir / '.env'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered env file to %s", out_path)
         return out_path
