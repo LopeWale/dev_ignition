@@ -1,23 +1,26 @@
 # src/utils.py
 
 import shutil
-import zipfile
 import uuid
+import zipfile
 from pathlib import Path
 
-# === Configure your repo root and subdirs here ===
-BASE_DIR       = Path(__file__).resolve().parent.parent
-BACKUPS_DIR    = BASE_DIR / 'backups'
-PROJECTS_DIR   = BASE_DIR / 'projects'
-TAGS_DIR       = BASE_DIR / 'tags'
-GENERATED_DIR  = BASE_DIR / 'generated'
+from paths import (
+    BACKUPS_DIR,
+    GENERATED_DIR,
+    JDBC_DIR,
+    MODULES_DIR,
+    PROJECTS_DIR,
+    SECRETS_DIR,
+    TAGS_DIR,
+    ensure_runtime_directories,
+)
 
 def ensure_directories():
     """
     Create the core directories if they don't exist.
     """
-    for d in (BACKUPS_DIR, PROJECTS_DIR, TAGS_DIR, GENERATED_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+    ensure_runtime_directories()
 
 def save_backup(src_path: str) -> str:
     """
