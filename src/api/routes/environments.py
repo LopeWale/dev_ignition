@@ -10,6 +10,8 @@ from api.schemas import (
     EnvironmentList,
     ErrorMessage,
 )
+from errors import DockerManagerError
+
 from services import EnvironmentNotFoundError, EnvironmentService
 
 
@@ -64,5 +66,39 @@ def get_router(service: EnvironmentService) -> APIRouter:
         except EnvironmentNotFoundError as exc:  # pragma: no cover - straightforward branch
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post(
+        "/{env_id}/actions/start",
+        response_model=EnvironmentDetail,
+        responses={
+            status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorMessage},
+        },
+    )
+    def start_environment(env_id: str, wait: bool = False) -> EnvironmentDetail:
+        try:
+            record = service.start_environment(env_id, wait_for_gateway=wait)
+        except EnvironmentNotFoundError as exc:  # pragma: no cover - straightforward branch
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found") from exc
+        except DockerManagerError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        return EnvironmentDetail(**service.to_detail_payload(record))
+
+    @router.post(
+        "/{env_id}/actions/stop",
+        response_model=EnvironmentDetail,
+        responses={
+            status.HTTP_404_NOT_FOUND: {"model": ErrorMessage},
+            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorMessage},
+        },
+    )
+    def stop_environment(env_id: str) -> EnvironmentDetail:
+        try:
+            record = service.stop_environment(env_id)
+        except EnvironmentNotFoundError as exc:  # pragma: no cover - straightforward branch
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Environment not found") from exc
+        except DockerManagerError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        return EnvironmentDetail(**service.to_detail_payload(record))
 
     return router

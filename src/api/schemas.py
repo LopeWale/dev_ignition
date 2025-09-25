@@ -280,6 +280,10 @@ class EnvironmentSummary(BaseModel):
     data_mount_source: str
     compose_file: str
     env_file: str
+    status: Literal["created", "starting", "running", "stopping", "stopped", "error"]
+    last_started_at: Optional[datetime]
+    last_stopped_at: Optional[datetime]
+    last_error: Optional[str]
 
 
 class EnvironmentDetail(EnvironmentSummary):

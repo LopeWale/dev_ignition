@@ -9,10 +9,11 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
 from compose_generator import build_config, render_compose, render_env
+from docker_manager import DockerManager, DockerManagerError
 from paths import BACKUPS_DIR, BASE_DIR, GENERATED_DIR, PROJECTS_DIR, TAGS_DIR
 
 from models import ComposeConfig
@@ -45,6 +46,11 @@ class EnvironmentRecord:
     data_mount_type: str
     data_mount_source: str
     config: Dict[str, Any]
+    status: str = "created"
+    last_started_at: Optional[datetime] = None
+    last_stopped_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
 
     def to_dict(self, base_dir: Path) -> Dict[str, Any]:
         """Serialise to a JSON friendly structure."""
@@ -64,6 +70,13 @@ class EnvironmentRecord:
             "data_mount_type": self.data_mount_type,
             "data_mount_source": self.data_mount_source,
             "config": self.config,
+            "status": self.status,
+            "last_started_at": self.last_started_at.isoformat()
+            if self.last_started_at
+            else None,
+            "last_stopped_at": self.last_stopped_at.isoformat()
+            if self.last_stopped_at
+            else None,
         }
 
     @classmethod
@@ -95,6 +108,14 @@ class EnvironmentRecord:
             data_mount_type=data["data_mount_type"],
             data_mount_source=data["data_mount_source"],
             config=data.get("config", {}),
+            status=data.get("status", "created"),
+            last_started_at=datetime.fromisoformat(data["last_started_at"])
+            if data.get("last_started_at")
+            else None,
+            last_stopped_at=datetime.fromisoformat(data["last_stopped_at"])
+            if data.get("last_stopped_at")
+            else None,
+            last_error=data.get("last_error"),
         )
 
 
@@ -117,11 +138,22 @@ def _stringify_optional_path(path: Optional[Path]) -> Optional[str]:
 class EnvironmentService:
     """Coordinates Compose generation and persistence of environment metadata."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        docker_manager_factory: Optional[
+            Callable[[Path, Optional[Path]], DockerManager]
+        ] = None,
+    ) -> None:
+
         self._lock = threading.Lock()
         self._root = GENERATED_DIR / "environments"
         self._registry_path = self._root / "registry.json"
         self._root.mkdir(parents=True, exist_ok=True)
+        self._docker_manager_factory = (
+            docker_manager_factory or self._default_docker_manager_factory
+        )
+
         logger.debug("EnvironmentService initialised with root %s", self._root)
 
     # Public API -----------------------------------------------------------------
@@ -174,6 +206,7 @@ class EnvironmentService:
                 data_mount_type=cfg.data_mount_type,
                 data_mount_source=cfg.data_mount_source,
                 config=self._sanitise_config(cfg),
+                status="created",
             )
 
             records = self._load_records()
@@ -214,6 +247,76 @@ class EnvironmentService:
         shutil.rmtree(env_dir, ignore_errors=True)
         logger.info("Deleted environment %s and cleaned up %s", env_id, env_dir)
 
+    def start_environment(
+        self,
+        env_id: str,
+        *,
+        wait_for_gateway: bool = False,
+        wait_timeout: int = 60,
+    ) -> EnvironmentRecord:
+        """Start an environment using docker compose and update its status."""
+
+        record = self._transition(env_id, status="starting", clear_error=True)
+
+        manager = self._docker_manager_factory(record.compose_file, record.env_file)
+        logger.info("Starting environment %s", env_id)
+        try:
+            manager.up_detached()
+            if wait_for_gateway and not manager.wait_for_gateway(
+                record.http_port, timeout=wait_timeout
+            ):
+                raise DockerManagerError(
+                    "Gateway did not become healthy within the allotted timeout."
+                )
+        except DockerManagerError as exc:
+            logger.exception("Failed to start environment %s", env_id)
+            self._transition(env_id, status="error", last_error=str(exc))
+            raise
+        except Exception as exc:
+            logger.exception("Unexpected failure starting environment %s", env_id)
+            self._transition(env_id, status="error", last_error=str(exc))
+            raise DockerManagerError(
+                "Unexpected error while starting docker compose stack.",
+                underlying=exc,
+            ) from exc
+
+        now = datetime.now(timezone.utc)
+        return self._transition(
+            env_id,
+            status="running",
+            last_started_at=now,
+            last_error=None,
+        )
+
+    def stop_environment(self, env_id: str) -> EnvironmentRecord:
+        """Stop a running environment via docker compose and update its status."""
+
+        record = self._transition(env_id, status="stopping")
+
+        manager = self._docker_manager_factory(record.compose_file, record.env_file)
+        logger.info("Stopping environment %s", env_id)
+        try:
+            manager.down()
+        except DockerManagerError as exc:
+            logger.exception("Failed to stop environment %s", env_id)
+            self._transition(env_id, status="error", last_error=str(exc))
+            raise
+        except Exception as exc:
+            logger.exception("Unexpected failure stopping environment %s", env_id)
+            self._transition(env_id, status="error", last_error=str(exc))
+            raise DockerManagerError(
+                "Unexpected error while stopping docker compose stack.",
+                underlying=exc,
+            ) from exc
+
+        now = datetime.now(timezone.utc)
+        return self._transition(
+            env_id,
+            status="stopped",
+            last_stopped_at=now,
+            last_error=None,
+        )
+
     # Serialisation helpers -------------------------------------------------------
     def to_summary_payload(self, record: EnvironmentRecord) -> Dict[str, Any]:
         """Convert a record into a serialisable structure for the API layer."""
@@ -233,6 +336,11 @@ class EnvironmentService:
             "data_mount_source": record.data_mount_source,
             "compose_file": base["compose_file"],
             "env_file": base["env_file"],
+            "status": record.status,
+            "last_started_at": record.last_started_at,
+            "last_stopped_at": record.last_stopped_at,
+            "last_error": record.last_error,
+
         }
 
     def to_detail_payload(self, record: EnvironmentRecord) -> Dict[str, Any]:
@@ -310,3 +418,48 @@ class EnvironmentService:
             "tag_name": cfg.tag_file.name if cfg.tag_file else None,
             "backup_name": cfg.backup.name if cfg.backup else None,
         }
+
+    def _default_docker_manager_factory(
+        self, compose_path: Path, env_path: Optional[Path]
+    ) -> DockerManager:
+        return DockerManager(compose_file=compose_path, env_file=env_path)
+
+    _UNSET = object()
+
+    def _transition(
+        self,
+        env_id: str,
+        *,
+        status: Optional[str] = None,
+        last_started_at: Optional[datetime] = None,
+        last_stopped_at: Optional[datetime] = None,
+        last_error: object = _UNSET,
+        clear_error: bool = False,
+    ) -> EnvironmentRecord:
+        """Update a record with the provided fields and persist the registry."""
+
+        with self._lock:
+            records = self._load_records()
+            target: Optional[EnvironmentRecord] = None
+            for record in records:
+                if record.id == env_id:
+                    target = record
+                    break
+
+            if target is None:
+                raise EnvironmentNotFoundError(env_id)
+
+            if status is not None:
+                target.status = status
+            if last_started_at is not None:
+                target.last_started_at = last_started_at
+            if last_stopped_at is not None:
+                target.last_stopped_at = last_stopped_at
+            if clear_error:
+                target.last_error = None
+            elif last_error is not self._UNSET:
+                target.last_error = last_error
+
+            self._save_records(records)
+
+            return target

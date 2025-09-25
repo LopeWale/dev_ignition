@@ -93,7 +93,13 @@ The groundwork for the future web application now includes a FastAPI-powered ser
    - `POST /api/environments` – render Compose and `.env` artifacts for a new gateway definition.
    - `GET /api/environments` – list provisioned environments and their generated file locations.
    - `GET /api/environments/{id}` – retrieve a detailed, sanitised view of an environment.
+   - `POST /api/environments/{id}/actions/start` – launch the generated stack (optionally waiting for the gateway health check).
+   - `POST /api/environments/{id}/actions/stop` – tear down the stack and mark the environment as stopped.
    - `DELETE /api/environments/{id}` – remove generated artifacts for a retired environment.
+
+Environment records track lifecycle status (`created`, `running`, `stopped`, `error`, etc.) alongside timestamps for the most
+recent start/stop events so the upcoming SPA can surface stateful controls.
+
 
 Generated files are written beneath `generated/environments/<id>/` so each environment remains isolated. Metadata is tracked in `generated/environments/registry.json` and excludes sensitive values like admin passwords.
 
@@ -107,4 +113,3 @@ Generated files are written beneath `generated/environments/<id>/` so each envir
 - **Secrets-aware licensing** – Store activation tokens or license keys in `secrets/activation-token` and `secrets/license-key`. They will be mounted read-only and injected into the container via `IGNITION_ACTIVATION_TOKEN_FILE` / `IGNITION_LICENSE_KEY_FILE` so sensitive values stay out of Compose files.
 - **Custom runtime identities** – Provide optional `IGNITION_UID` / `IGNITION_GID` values to match host ownership when bind-mounting data directories or secrets.
 - **Cross-platform volume mounts** – Generated Compose files now emit long-form volume syntax and pre-create bind-mount directories so host paths resolve cleanly across Linux, macOS, and Windows workstations.
-
