@@ -4,7 +4,6 @@ import shutil
 import uuid
 import zipfile
 from pathlib import Path
-
 from paths import (
     BACKUPS_DIR,
     GENERATED_DIR,
@@ -16,11 +15,13 @@ from paths import (
     ensure_runtime_directories,
 )
 
+
 def ensure_directories():
     """
     Create the core directories if they don't exist.
     """
     ensure_runtime_directories()
+
 
 def save_backup(src_path: str) -> str:
     """

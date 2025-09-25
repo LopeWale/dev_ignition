@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from compose_generator import build_config, render_compose, render_env
 from paths import BACKUPS_DIR, BASE_DIR, GENERATED_DIR, PROJECTS_DIR, TAGS_DIR
+
 from models import ComposeConfig
 
 if TYPE_CHECKING:  # pragma: no cover - typing only

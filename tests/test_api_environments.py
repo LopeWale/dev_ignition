@@ -18,6 +18,7 @@ from api import create_app
 from paths import GENERATED_DIR
 
 
+
 pytestmark = pytest.mark.filterwarnings(
     "ignore:The 'app' shortcut is now deprecated:DeprecationWarning:httpx._client"
 )

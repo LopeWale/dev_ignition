@@ -27,12 +27,12 @@ ensure_runtime_directories()
 ACTIVATION_TOKEN_CONTAINER_PATH = '/run/secrets/ignition/activation-token'
 LICENSE_KEY_CONTAINER_PATH = '/run/secrets/ignition/license-key'
 
+
 def _compose_host_path(path: Path) -> str:
     """Convert a host path into a Docker Compose friendly POSIX string."""
 
     resolved = path.expanduser().resolve(strict=False)
     return resolved.as_posix()
-
 
 def _parse_bool(value: Optional[str]) -> bool:
     if isinstance(value, bool):
@@ -57,6 +57,7 @@ def _parse_optional_int(value: Optional[str], label: str) -> Optional[int]:
 def _normalise_data_mount(
     source: str, requested_type: Optional[str]
 ) -> Tuple[str, str, Optional[Path]]:
+  
     cleaned_source = (source or '').strip()
     mount_type = (requested_type or '').strip().lower()
     if not cleaned_source:
@@ -79,7 +80,6 @@ def _normalise_data_mount(
         return _compose_host_path(resolved), 'bind', resolved
     return cleaned_source, 'volume', None
 
-
 def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
     if not path_value:
         return None
@@ -99,6 +99,7 @@ def _detect_default_secret(relative_name: str) -> Optional[Path]:
         seen.add(resolved)
         if resolved.is_file():
             return resolved
+
     return None
 
 
@@ -108,7 +109,6 @@ def _has_payload(directory: Path) -> bool:
             continue
         return True
     return False
-
 
 def _prepare_mount_dir(
     preferred: Optional[Path],
