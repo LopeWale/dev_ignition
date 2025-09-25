@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List
 
+
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ConfigBuildError
@@ -45,7 +46,6 @@ def _compose_host_path(path: Path) -> str:
     resolved = path.expanduser().resolve(strict=False)
     return resolved.as_posix()
 
-
 def _parse_bool(value: Optional[str]) -> bool:
     if isinstance(value, bool):
         return value
@@ -69,6 +69,7 @@ def _parse_optional_int(value: Optional[str], label: str) -> Optional[int]:
 def _normalise_data_mount(
     source: str, requested_type: Optional[str]
 ) -> Tuple[str, str, Optional[Path]]:
+
     cleaned_source = (source or '').strip()
     mount_type = (requested_type or '').strip().lower()
     if not cleaned_source:
@@ -92,6 +93,7 @@ def _normalise_data_mount(
     return cleaned_source, 'volume', None
 
 
+
 def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
     if not path_value:
         return None
@@ -111,6 +113,7 @@ def _detect_default_secret(relative_name: str) -> Optional[Path]:
         seen.add(resolved)
         if resolved.is_file():
             return resolved
+
     return None
 
 
@@ -120,7 +123,6 @@ def _has_payload(directory: Path) -> bool:
             continue
         return True
     return False
-
 
 def _prepare_mount_dir(
     preferred: Optional[Path],
@@ -316,7 +318,6 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             raise
         raise ConfigBuildError(str(e), underlying=e)
 
-
 def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
     """Render docker-compose.yml from template into the requested output directory."""
 
@@ -330,7 +331,6 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         template = env.get_template('docker-compose.yml.j2')
 
         context = cfg.to_dict()
-
         modules_mount = _prepare_mount_dir(
             cfg.modules_dir,
             MODULES_DIR,
@@ -400,6 +400,7 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         context.update({
             'volume_mounts': volume_mounts,
             'declared_volumes': declared_volumes,
+
         })
         if cfg.activation_token_file:
             context['activation_token_container_path'] = (

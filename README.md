@@ -107,3 +107,4 @@ Generated files are written beneath `generated/environments/<id>/` so each envir
 - **Secrets-aware licensing** – Store activation tokens or license keys in `secrets/activation-token` and `secrets/license-key`. They will be mounted read-only and injected into the container via `IGNITION_ACTIVATION_TOKEN_FILE` / `IGNITION_LICENSE_KEY_FILE` so sensitive values stay out of Compose files.
 - **Custom runtime identities** – Provide optional `IGNITION_UID` / `IGNITION_GID` values to match host ownership when bind-mounting data directories or secrets.
 - **Cross-platform volume mounts** – Generated Compose files now emit long-form volume syntax and pre-create bind-mount directories so host paths resolve cleanly across Linux, macOS, and Windows workstations.
+

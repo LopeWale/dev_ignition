@@ -50,7 +50,8 @@ services:
       {% if conn_type == 'serial' and baud_rate %}
       SERIAL_BAUD: "{{ baud_rate }}"
       {% endif %}
-      {% if mode == 'backup' %}
+
+{% if mode == 'backup' %}
       GATEWAY_AUTO_RESTORE_ENABLED: "true"
       {% endif %}
 
