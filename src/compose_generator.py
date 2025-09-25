@@ -369,9 +369,18 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         if cfg.mode == 'backup' and cfg.backup:
             add_bind(cfg.backup.path.resolve(), '/restore.gwbk', read_only=True)
         else:
+            # The expected project structure is that cfg.project.path is a direct child of PROJECTS_DIR.
             projects_source = PROJECTS_DIR
             if cfg.project:
-                projects_source = cfg.project.path.parent
+                parent_dir = cfg.project.path.parent
+                # Validate that parent_dir is PROJECTS_DIR or a subdirectory thereof
+                try:
+                    parent_dir.relative_to(PROJECTS_DIR)
+                except ValueError:
+                    raise ConfigBuildError(
+                        f"Project path parent '{parent_dir}' is not within the expected projects directory '{PROJECTS_DIR}'."
+                    )
+                projects_source = parent_dir
             projects_source.mkdir(parents=True, exist_ok=True)
             add_bind(
                 projects_source.resolve(),
