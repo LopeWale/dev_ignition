@@ -67,6 +67,7 @@ services:
         read_only: true
 {% endif %}
 {% endfor %}
+
     {% if conn_type == 'serial' and com_port %}
     devices:
       - "{{ com_port }}:{{ com_port }}"

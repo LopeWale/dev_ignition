@@ -15,6 +15,17 @@ from paths import (
     ensure_runtime_directories,
 )
 
+from paths import (
+    BACKUPS_DIR,
+    GENERATED_DIR,
+    JDBC_DIR,
+    MODULES_DIR,
+    PROJECTS_DIR,
+    SECRETS_DIR,
+    TAGS_DIR,
+    ensure_runtime_directories,
+)
+
 
 def ensure_directories():
     """

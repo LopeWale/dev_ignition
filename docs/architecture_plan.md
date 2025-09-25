@@ -112,10 +112,13 @@
 - **Observability**: Structured logging, distributed tracing, and metrics instrumentation for every service.
 
 ## 12. Delivery Roadmap
-1. **MVP** – Web SPA with environment provisioning (Docker), Git-backed project storage, manual secrets entry, and basic monitoring widgets.
-2. **Phase 2** – Automated CI/CD templates, secrets vault integration, telemetry aggregation, and basic AI documentation generation.
-3. **Phase 3** – Kubernetes orchestration, advanced analytics (predictive maintenance), AI-assisted troubleshooting, and marketplace for reusable templates.
-4. **Phase 4** – Multi-tenant support, cross-site federation, and extensibility for third-party automation platforms beyond Ignition.
+1. **Phase 0 – Container Runtime Hardening** – Finalise the Docker Compose generator, ensure persistent `/data` volumes, standardise long-form module/JDBC/secret mounts, validate host paths ahead of render time, and surface health checks so local gateways follow Ignition’s container best practices.
+2. **Phase 1 – MVP Control Plane** – Ship the first web SPA backed by the new FastAPI service layer with on-demand Docker environments, Git-backed project storage, manual secrets entry, and foundational monitoring widgets.
+3. **Phase 2 – Automated Delivery Tooling** – Introduce pipeline templates, Vault-backed secrets rotation, richer telemetry ingestion, and baseline AI documentation generation tied to deployment events.
+4. **Phase 3 – Intelligent Orchestration** – Add Kubernetes scheduling, predictive analytics, AI-assisted troubleshooting, and a marketplace for reusable orchestration templates.
+5. **Phase 4 – Enterprise & Ecosystem** – Deliver multi-tenant governance, cross-site federation, and extensibility hooks for non-Ignition automation platforms.
+
+Refer to [`delivery_phases.md`](delivery_phases.md) for a detailed breakdown of objectives, milestones, and exit criteria for each phase.
 
 ## 13. Open Questions
 - How will binary Ignition assets be diffed/merged in collaborative scenarios? Investigate custom merge drivers or metadata representations.

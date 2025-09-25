@@ -27,7 +27,6 @@ ensure_runtime_directories()
 ACTIVATION_TOKEN_CONTAINER_PATH = '/run/secrets/ignition/activation-token'
 LICENSE_KEY_CONTAINER_PATH = '/run/secrets/ignition/license-key'
 
-
 def _compose_host_path(path: Path) -> str:
     """Convert a host path into a Docker Compose friendly POSIX string."""
 
@@ -57,7 +56,6 @@ def _parse_optional_int(value: Optional[str], label: str) -> Optional[int]:
 def _normalise_data_mount(
     source: str, requested_type: Optional[str]
 ) -> Tuple[str, str, Optional[Path]]:
-  
     cleaned_source = (source or '').strip()
     mount_type = (requested_type or '').strip().lower()
     if not cleaned_source:
@@ -99,7 +97,6 @@ def _detect_default_secret(relative_name: str) -> Optional[Path]:
         seen.add(resolved)
         if resolved.is_file():
             return resolved
-
     return None
 
 
@@ -369,18 +366,10 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         if cfg.mode == 'backup' and cfg.backup:
             add_bind(cfg.backup.path.resolve(), '/restore.gwbk', read_only=True)
         else:
-            # The expected project structure is that cfg.project.path is a direct child of PROJECTS_DIR.
             projects_source = PROJECTS_DIR
             if cfg.project:
-                parent_dir = cfg.project.path.parent
-                # Validate that parent_dir is PROJECTS_DIR or a subdirectory thereof
-                try:
-                    parent_dir.relative_to(PROJECTS_DIR)
-                except ValueError:
-                    raise ConfigBuildError(
-                        f"Project path parent '{parent_dir}' is not within the expected projects directory '{PROJECTS_DIR}'."
-                    )
-                projects_source = parent_dir
+                projects_source = cfg.project.path.parent
+
             projects_source.mkdir(parents=True, exist_ok=True)
             add_bind(
                 projects_source.resolve(),
