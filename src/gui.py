@@ -4,7 +4,6 @@ import socket
 import subprocess
 import sys
 import threading
-from pathlib import Path
 import typing
 import webbrowser
 
@@ -20,17 +19,11 @@ from PyQt5.QtGui import QCloseEvent, QTextCursor
 # application modules
 from log_watcher import FileWatcher
 from logging_config import setup_logging
-from utils import save_backup, save_tag_file, unzip_project, clear_generated
+from utils import clear_generated, save_backup, save_tag_file, unzip_project
 from compose_generator import build_config, render_compose, render_env
 from docker_manager import DockerManager
 from errors import AppError, DockerManagerError
-
-# Constants for directories
-BASE_DIR     = Path(__file__).resolve().parent.parent
-BACKUPS_DIR  = BASE_DIR / 'backups'
-PROJECTS_DIR = BASE_DIR / 'projects'
-TAGS_DIR     = BASE_DIR / 'tags'
-GENERATED    = BASE_DIR / 'generated'
+from paths import BACKUPS_DIR, BASE_DIR, LOGS_DIR, PROJECTS_DIR, TAGS_DIR
 
 
 class MainWindow(QMainWindow):
@@ -449,7 +442,7 @@ class MainWindow(QMainWindow):
         self.log_console.clear()
 
         # Truncate the on-disk log file (if it exists)
-        log_path = BASE_DIR / 'logs' / 'ignition-admin.log'
+        log_path = LOGS_DIR / 'ignition-admin.log'
         try:
             with open(log_path, 'w', encoding='utf-8') as f:
                 # Truncate the file to zero length
@@ -461,7 +454,7 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    setup_logging(log_file=BASE_DIR / 'logs' / 'ignition-admin.log')
+    setup_logging(log_file=LOGS_DIR / 'ignition-admin.log')
     app = QApplication(sys.argv)
     
     dark = QPalette()

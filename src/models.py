@@ -86,7 +86,6 @@ class ComposeConfig:
     data_mount_type: Literal['volume', 'bind'] = 'volume'
     data_mount_target: str = '/data'
     data_mount_local: Optional[Path] = None
-
     modules_dir: Optional[Path] = None
     jdbc_dir: Optional[Path] = None
     gateway_modules_enabled: Optional[str] = None
@@ -146,7 +145,7 @@ class ComposeConfig:
                     "Data mount local path must be provided when using a bind mount."
                 )
             data_source_path = self.data_mount_local
-        
+
             if not data_source_path.exists():
                 raise FileNotFoundError(
                     f"Data mount source not found: {data_source_path}"

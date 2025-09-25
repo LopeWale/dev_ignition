@@ -1,43 +1,31 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List
-
+from typing import Dict, List, Optional, Tuple
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ConfigBuildError
-from models import Backup, Project, TagFile, ComposeConfig
+from models import Backup, ComposeConfig, Project, TagFile
+from paths import (
+    BACKUPS_DIR,
+    GENERATED_DIR,
+    JDBC_DIR,
+    LOGS_DIR,
+    MODULES_DIR,
+    PROJECTS_DIR,
+    SECRETS_DIR,
+    TAGS_DIR,
+    TEMPLATES_DIR,
+    ensure_runtime_directories,
+)
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
-# Directories
-BASE_DIR = Path(__file__).resolve().parent.parent
-TEMPLATES_DIR = BASE_DIR / 'templates'
-GENERATED_DIR = BASE_DIR / 'generated'
-PROJECTS_DIR = BASE_DIR / 'projects'
-TAGS_DIR = BASE_DIR / 'tags'
-BACKUPS_DIR = BASE_DIR / 'backups'
-LOGS_DIR = BASE_DIR / 'logs'
-MODULES_DIR = BASE_DIR / 'modules'
-JDBC_DIR = BASE_DIR / 'jdbc'
-SECRETS_DIR = BASE_DIR / 'secrets'
+ensure_runtime_directories()
 
 ACTIVATION_TOKEN_CONTAINER_PATH = '/run/secrets/ignition/activation-token'
 LICENSE_KEY_CONTAINER_PATH = '/run/secrets/ignition/license-key'
-
-
-for directory in (
-    MODULES_DIR,
-    JDBC_DIR,
-    SECRETS_DIR,
-    PROJECTS_DIR,
-    TAGS_DIR,
-    BACKUPS_DIR,
-    LOGS_DIR,
-    GENERATED_DIR,
-):
-    directory.mkdir(parents=True, exist_ok=True)
 
 
 def _compose_host_path(path: Path) -> str:
@@ -69,7 +57,7 @@ def _parse_optional_int(value: Optional[str], label: str) -> Optional[int]:
 def _normalise_data_mount(
     source: str, requested_type: Optional[str]
 ) -> Tuple[str, str, Optional[Path]]:
-
+  
     cleaned_source = (source or '').strip()
     mount_type = (requested_type or '').strip().lower()
     if not cleaned_source:
@@ -91,8 +79,6 @@ def _normalise_data_mount(
         resolved = local_path.resolve()
         return _compose_host_path(resolved), 'bind', resolved
     return cleaned_source, 'volume', None
-
-
 
 def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
     if not path_value:
@@ -318,6 +304,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             raise
         raise ConfigBuildError(str(e), underlying=e)
 
+
 def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
     """Render docker-compose.yml from template into the requested output directory."""
 
@@ -331,6 +318,7 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         template = env.get_template('docker-compose.yml.j2')
 
         context = cfg.to_dict()
+
         modules_mount = _prepare_mount_dir(
             cfg.modules_dir,
             MODULES_DIR,
@@ -379,9 +367,25 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         add_bind(logs_path, '/usr/local/bin/ignition/data/logs')
 
         if cfg.mode == 'backup' and cfg.backup:
-            add_bind(cfg.backup.path, '/restore.gwbk', read_only=True)
+            add_bind(cfg.backup.path.resolve(), '/restore.gwbk', read_only=True)
         else:
-            add_bind(PROJECTS_DIR.resolve(), '/usr/local/bin/ignition/data/projects')
+            # The expected project structure is that cfg.project.path is a direct child of PROJECTS_DIR.
+            projects_source = PROJECTS_DIR
+            if cfg.project:
+                parent_dir = cfg.project.path.parent
+                # Validate that parent_dir is PROJECTS_DIR or a subdirectory thereof
+                try:
+                    parent_dir.relative_to(PROJECTS_DIR)
+                except ValueError:
+                    raise ConfigBuildError(
+                        f"Project path parent '{parent_dir}' is not within the expected projects directory '{PROJECTS_DIR}'."
+                    )
+                projects_source = parent_dir
+            projects_source.mkdir(parents=True, exist_ok=True)
+            add_bind(
+                projects_source.resolve(),
+                '/usr/local/bin/ignition/data/projects',
+            )
 
         if cfg.tag_file:
             add_bind(cfg.tag_file.path, '/usr/local/bin/ignition/data/init-tags.json', read_only=True)
@@ -400,7 +404,6 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         context.update({
             'volume_mounts': volume_mounts,
             'declared_volumes': declared_volumes,
-
         })
         if cfg.activation_token_file:
             context['activation_token_container_path'] = (
