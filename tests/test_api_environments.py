@@ -18,7 +18,6 @@ from api import create_app
 from services import EnvironmentService
 from paths import GENERATED_DIR
 
-
 pytestmark = pytest.mark.filterwarnings(
     "ignore:The 'app' shortcut is now deprecated:DeprecationWarning:httpx._client"
 )
@@ -74,6 +73,7 @@ def test_environment_lifecycle(tmp_path):
         assert created["status"] == "created"
         assert created["last_started_at"] is None
 
+
         compose_path = _resolve_path(created["compose_file"])
         env_file = _resolve_path(created["env_file"])
         assert compose_path.exists()
@@ -85,12 +85,14 @@ def test_environment_lifecycle(tmp_path):
         assert listing["items"][0]["id"] == env_id
         assert listing["items"][0]["status"] == "created"
 
+
         detail_response = client.get(f"/api/environments/{env_id}")
         assert detail_response.status_code == 200
         detail = detail_response.json()
         assert detail["id"] == env_id
         assert detail["config"]["image_repo"] == "inductiveautomation/ignition"
         assert detail["status"] == "created"
+
 
         delete_response = client.delete(f"/api/environments/{env_id}")
         assert delete_response.status_code == 204
@@ -100,7 +102,6 @@ def test_environment_lifecycle(tmp_path):
 
     assert not compose_path.exists()
     assert not env_file.exists()
-
 
 def test_environment_start_stop(tmp_path):
     class DummyManager:
@@ -171,3 +172,4 @@ def test_environment_start_stop(tmp_path):
 
         assert len(managers) >= 2
         assert managers[-1].down_calls == 1
+

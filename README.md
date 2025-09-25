@@ -100,6 +100,7 @@ The groundwork for the future web application now includes a FastAPI-powered ser
 Environment records track lifecycle status (`created`, `running`, `stopped`, `error`, etc.) alongside timestamps for the most
 recent start/stop events so the upcoming SPA can surface stateful controls.
 
+
 Generated files are written beneath `generated/environments/<id>/` so each environment remains isolated. Metadata is tracked in `generated/environments/registry.json` and excludes sensitive values like admin passwords.
 
 ---

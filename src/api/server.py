@@ -1,16 +1,14 @@
 """FastAPI application wiring for the Ignition control plane."""
 
 from __future__ import annotations
-
 from typing import Optional
-
 from fastapi import FastAPI
-
 from api.routes import get_environment_router
 from services import EnvironmentService
 
 
 def create_app(environment_service: Optional[EnvironmentService] = None) -> FastAPI:
+
     """Instantiate the FastAPI application."""
 
     app = FastAPI(

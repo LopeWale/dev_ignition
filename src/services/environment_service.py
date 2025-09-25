@@ -15,6 +15,7 @@ from uuid import uuid4
 from compose_generator import build_config, render_compose, render_env
 from docker_manager import DockerManager, DockerManagerError
 from paths import BACKUPS_DIR, BASE_DIR, GENERATED_DIR, PROJECTS_DIR, TAGS_DIR
+
 from models import ComposeConfig
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -50,6 +51,7 @@ class EnvironmentRecord:
     last_stopped_at: Optional[datetime] = None
     last_error: Optional[str] = None
 
+
     def to_dict(self, base_dir: Path) -> Dict[str, Any]:
         """Serialise to a JSON friendly structure."""
 
@@ -75,7 +77,6 @@ class EnvironmentRecord:
             "last_stopped_at": self.last_stopped_at.isoformat()
             if self.last_stopped_at
             else None,
-            "last_error": self.last_error,
         }
 
     @classmethod
@@ -144,6 +145,7 @@ class EnvironmentService:
             Callable[[Path, Optional[Path]], DockerManager]
         ] = None,
     ) -> None:
+
         self._lock = threading.Lock()
         self._root = GENERATED_DIR / "environments"
         self._registry_path = self._root / "registry.json"
@@ -151,6 +153,7 @@ class EnvironmentService:
         self._docker_manager_factory = (
             docker_manager_factory or self._default_docker_manager_factory
         )
+
         logger.debug("EnvironmentService initialised with root %s", self._root)
 
     # Public API -----------------------------------------------------------------
@@ -337,6 +340,7 @@ class EnvironmentService:
             "last_started_at": record.last_started_at,
             "last_stopped_at": record.last_stopped_at,
             "last_error": record.last_error,
+
         }
 
     def to_detail_payload(self, record: EnvironmentRecord) -> Dict[str, Any]:
