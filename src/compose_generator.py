@@ -33,7 +33,6 @@ def _compose_host_path(path: Path) -> str:
     resolved = path.expanduser().resolve(strict=False)
     return resolved.as_posix()
 
-
 def _parse_bool(value: Optional[str]) -> bool:
     if isinstance(value, bool):
         return value
@@ -79,7 +78,6 @@ def _normalise_data_mount(
         return _compose_host_path(resolved), 'bind', resolved
     return cleaned_source, 'volume', None
 
-
 def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
     if not path_value:
         return None
@@ -108,7 +106,6 @@ def _has_payload(directory: Path) -> bool:
             continue
         return True
     return False
-
 
 def _prepare_mount_dir(
     preferred: Optional[Path],
@@ -372,6 +369,7 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
             projects_source = PROJECTS_DIR
             if cfg.project:
                 projects_source = cfg.project.path.parent
+
             projects_source.mkdir(parents=True, exist_ok=True)
             add_bind(
                 projects_source.resolve(),
