@@ -77,6 +77,28 @@ ignition-admin-panel/
 
 ---
 
+## HTTP API (Preview)
+
+The groundwork for the future web application now includes a FastAPI-powered service layer. It exposes environment lifecycle operations so the forthcoming SPA can provision gateways over HTTP.
+
+1. Install dependencies (includes FastAPI, Uvicorn, and pytest for the new service):
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Launch the API locally:
+   ```bash
+   uvicorn api.server:app --reload
+   ```
+3. Explore the interactive docs at [http://localhost:8000/docs](http://localhost:8000/docs). Key endpoints:
+   - `POST /api/environments` – render Compose and `.env` artifacts for a new gateway definition.
+   - `GET /api/environments` – list provisioned environments and their generated file locations.
+   - `GET /api/environments/{id}` – retrieve a detailed, sanitised view of an environment.
+   - `DELETE /api/environments/{id}` – remove generated artifacts for a retired environment.
+
+Generated files are written beneath `generated/environments/<id>/` so each environment remains isolated. Metadata is tracked in `generated/environments/registry.json` and excludes sensitive values like admin passwords.
+
+---
+
 ## Advanced Docker configuration
 
 - **Persistent gateway data** – The generated Compose file mounts Ignition's runtime data to `/data` by default, following the community recommendation for resilient upgrades and container rebuilds. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-persist-gateway-data)
@@ -84,3 +106,5 @@ ignition-admin-panel/
 - **Drop-in JDBC drivers** – Add JDBC `.jar` files to `jdbc/` to bind-mount `/jdbc` and automatically link custom drivers before gateway start-up. [Reference](https://github.com/thirdgen88/ignition-docker/blob/main/docs/README.md#how-to-integrate-third-party-jdbc-drivers)
 - **Secrets-aware licensing** – Store activation tokens or license keys in `secrets/activation-token` and `secrets/license-key`. They will be mounted read-only and injected into the container via `IGNITION_ACTIVATION_TOKEN_FILE` / `IGNITION_LICENSE_KEY_FILE` so sensitive values stay out of Compose files.
 - **Custom runtime identities** – Provide optional `IGNITION_UID` / `IGNITION_GID` values to match host ownership when bind-mounting data directories or secrets.
+- **Cross-platform volume mounts** – Generated Compose files now emit long-form volume syntax and pre-create bind-mount directories so host paths resolve cleanly across Linux, macOS, and Windows workstations.
+

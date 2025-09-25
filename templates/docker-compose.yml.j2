@@ -50,7 +50,8 @@ services:
       {% if conn_type == 'serial' and baud_rate %}
       SERIAL_BAUD: "{{ baud_rate }}"
       {% endif %}
-      {% if mode == 'backup' %}
+
+{% if mode == 'backup' %}
       GATEWAY_AUTO_RESTORE_ENABLED: "true"
       {% endif %}
 
@@ -59,25 +60,14 @@ services:
       - "{{ https_port }}:8043"
 
     volumes:
-      - {{ data_mount_source }}:{{ data_mount_target }}
-      {% if mode == 'backup' %}
-      - {{ backups_dir }}/{{ backup_file }}:/restore.gwbk:ro
-      {% else %}
-      - {{ projects_dir }}:/usr/local/bin/ignition/data/projects
-      {% endif %}
-      {% if tag_file %}
-      - {{ tags_dir }}/{{ tag_file }}:/usr/local/bin/ignition/data/init-tags.json:ro
-      {% endif %}
-      - {{ logs_dir }}:/usr/local/bin/ignition/data/logs
-      {% if modules_mount %}
-      - {{ modules_mount }}:/modules
-      {% endif %}
-      {% if jdbc_mount %}
-      - {{ jdbc_mount }}:/jdbc
-      {% endif %}
-      {% for secret in secret_mounts %}
-      - {{ secret.source }}:{{ secret.target }}:ro
-      {% endfor %}
+{% for volume in volume_mounts %}
+      - type: {{ volume.type }}
+        source: {{ volume.source | tojson }}
+        target: {{ volume.target | tojson }}
+{% if volume.read_only %}
+        read_only: true
+{% endif %}
+{% endfor %}
 
     {% if conn_type == 'serial' and com_port %}
     devices:
@@ -95,7 +85,9 @@ services:
       - wrapper.java.initmemory=512
       - wrapper.ignition.allowunsignedmodules=true
 
-{% if data_volume_name %}
+{% if declared_volumes %}
 volumes:
-  {{ data_volume_name }}:
+{% for name in declared_volumes %}
+  {{ name }}:
+{% endfor %}
 {% endif %}

@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
+
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -26,9 +27,24 @@ ACTIVATION_TOKEN_CONTAINER_PATH = '/run/secrets/ignition/activation-token'
 LICENSE_KEY_CONTAINER_PATH = '/run/secrets/ignition/license-key'
 
 
-for directory in (MODULES_DIR, JDBC_DIR, SECRETS_DIR):
+for directory in (
+    MODULES_DIR,
+    JDBC_DIR,
+    SECRETS_DIR,
+    PROJECTS_DIR,
+    TAGS_DIR,
+    BACKUPS_DIR,
+    LOGS_DIR,
+    GENERATED_DIR,
+):
     directory.mkdir(parents=True, exist_ok=True)
 
+
+def _compose_host_path(path: Path) -> str:
+    """Convert a host path into a Docker Compose friendly POSIX string."""
+
+    resolved = path.expanduser().resolve(strict=False)
+    return resolved.as_posix()
 
 def _parse_bool(value: Optional[str]) -> bool:
     if isinstance(value, bool):
@@ -50,7 +66,10 @@ def _parse_optional_int(value: Optional[str], label: str) -> Optional[int]:
         raise ConfigBuildError(f"{label} must be an integer: {exc}") from exc
 
 
-def _normalise_data_mount(source: str, requested_type: Optional[str]) -> Tuple[str, str]:
+def _normalise_data_mount(
+    source: str, requested_type: Optional[str]
+) -> Tuple[str, str, Optional[Path]]:
+
     cleaned_source = (source or '').strip()
     mount_type = (requested_type or '').strip().lower()
     if not cleaned_source:
@@ -67,9 +86,12 @@ def _normalise_data_mount(source: str, requested_type: Optional[str]) -> Tuple[s
         else:
             mount_type = 'volume'
     if mount_type == 'bind':
-        resolved = Path(cleaned_source).expanduser().resolve()
-        return str(resolved), 'bind'
-    return cleaned_source, 'volume'
+        local_path = Path(cleaned_source).expanduser()
+        local_path.mkdir(parents=True, exist_ok=True)
+        resolved = local_path.resolve()
+        return _compose_host_path(resolved), 'bind', resolved
+    return cleaned_source, 'volume', None
+
 
 
 def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
@@ -79,9 +101,19 @@ def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
 
 
 def _detect_default_secret(relative_name: str) -> Optional[Path]:
-    candidate = SECRETS_DIR / relative_name
-    if candidate.is_file():
-        return candidate
+    base = SECRETS_DIR / relative_name
+    candidates = [base]
+    for suffix in ('.txt', '.key', '.lic', '.json'):
+        candidates.append(base.with_suffix(suffix))
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve(strict=False)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.is_file():
+            return resolved
+
     return None
 
 
@@ -92,15 +124,19 @@ def _has_payload(directory: Path) -> bool:
         return True
     return False
 
-
-def _prepare_mount_dir(preferred: Optional[Path], fallback: Path) -> Optional[str]:
+def _prepare_mount_dir(
+    preferred: Optional[Path],
+    fallback: Path,
+    *,
+    force_mount: bool = False,
+) -> Optional[Path]:
     if preferred:
         path = preferred.expanduser()
         path.mkdir(parents=True, exist_ok=True)
-        return str(path.resolve())
+        return path.resolve()
     fallback.mkdir(parents=True, exist_ok=True)
-    if _has_payload(fallback):
-        return str(fallback.resolve())
+    if force_mount or _has_payload(fallback):
+        return fallback.resolve()
     return None
 
 
@@ -201,13 +237,17 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
         if not image_tag:
             image_tag = 'latest'
 
-        data_mount_source, data_mount_type = _normalise_data_mount(
+        data_mount_source, data_mount_type, data_mount_local = _normalise_data_mount(
             raw.get('data_mount_source', ''),
             raw.get('data_mount_type')
         )
 
         modules_dir = _resolve_optional_path(raw.get('modules_dir'))
         jdbc_dir = _resolve_optional_path(raw.get('jdbc_dir'))
+        if modules_dir:
+            modules_dir.mkdir(parents=True, exist_ok=True)
+        if jdbc_dir:
+            jdbc_dir.mkdir(parents=True, exist_ok=True)
 
         activation_token_file = (
             _resolve_optional_path(raw.get('activation_token_file'))
@@ -259,6 +299,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             data_mount_type=data_mount_type,
             modules_dir=modules_dir,
             jdbc_dir=jdbc_dir,
+            data_mount_local=data_mount_local,
             gateway_modules_enabled=gateway_modules_enabled,
             gateway_module_relink=gateway_module_relink,
             gateway_jdbc_relink=gateway_jdbc_relink,
@@ -277,12 +318,12 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             raise
         raise ConfigBuildError(str(e), underlying=e)
 
-
-def render_compose(cfg: ComposeConfig) -> Path:
-    """Render docker-compose.yml from template, using absolute host paths."""
+def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
+    """Render docker-compose.yml from template into the requested output directory."""
 
     try:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        target_dir = output_dir or GENERATED_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
         env = Environment(
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             autoescape=select_autoescape(['j2'])
@@ -290,32 +331,76 @@ def render_compose(cfg: ComposeConfig) -> Path:
         template = env.get_template('docker-compose.yml.j2')
 
         context = cfg.to_dict()
-        modules_mount = _prepare_mount_dir(cfg.modules_dir, MODULES_DIR)
-        jdbc_mount = _prepare_mount_dir(cfg.jdbc_dir, JDBC_DIR)
+        modules_mount = _prepare_mount_dir(
+            cfg.modules_dir,
+            MODULES_DIR,
+            force_mount=bool(cfg.gateway_module_relink or cfg.gateway_modules_enabled),
+        )
+        jdbc_mount = _prepare_mount_dir(
+            cfg.jdbc_dir,
+            JDBC_DIR,
+            force_mount=cfg.gateway_jdbc_relink,
+        )
 
-        secret_mounts = []
+        volume_mounts: List[Dict[str, object]] = []
+        declared_volumes: List[str] = []
+
+        def add_volume(
+            volume_type: str,
+            source: str,
+            target: str,
+            *,
+            read_only: bool = False,
+        ) -> None:
+            entry: Dict[str, object] = {
+                'type': volume_type,
+                'source': source,
+                'target': target,
+            }
+            if read_only:
+                entry['read_only'] = True
+            volume_mounts.append(entry)
+
+        def add_bind(path: Path, target: str, *, read_only: bool = False) -> None:
+            add_volume('bind', _compose_host_path(path), target, read_only=read_only)
+
+        if cfg.data_mount_type == 'volume':
+            declared_volumes.append(cfg.data_mount_source)
+            add_volume('volume', cfg.data_mount_source, cfg.data_mount_target)
+        else:
+            if not cfg.data_mount_local:
+                raise ConfigBuildError(
+                    'Missing bind-mount path for Ignition data directory.'
+                )
+            add_bind(cfg.data_mount_local, cfg.data_mount_target)
+
+        logs_path = LOGS_DIR.resolve()
+        logs_path.mkdir(parents=True, exist_ok=True)
+        add_bind(logs_path, '/usr/local/bin/ignition/data/logs')
+
+        if cfg.mode == 'backup' and cfg.backup:
+            add_bind(cfg.backup.path, '/restore.gwbk', read_only=True)
+        else:
+            add_bind(PROJECTS_DIR.resolve(), '/usr/local/bin/ignition/data/projects')
+
+        if cfg.tag_file:
+            add_bind(cfg.tag_file.path, '/usr/local/bin/ignition/data/init-tags.json', read_only=True)
+
+        if modules_mount:
+            add_bind(modules_mount, '/modules')
+
+        if jdbc_mount:
+            add_bind(jdbc_mount, '/jdbc')
+
         if cfg.activation_token_file:
-            secret_mounts.append({
-                'source': str(cfg.activation_token_file),
-                'target': ACTIVATION_TOKEN_CONTAINER_PATH,
-            })
+            add_bind(cfg.activation_token_file, ACTIVATION_TOKEN_CONTAINER_PATH, read_only=True)
         if cfg.license_key_file:
-            secret_mounts.append({
-                'source': str(cfg.license_key_file),
-                'target': LICENSE_KEY_CONTAINER_PATH,
-            })
+            add_bind(cfg.license_key_file, LICENSE_KEY_CONTAINER_PATH, read_only=True)
 
         context.update({
-            'projects_dir': str(PROJECTS_DIR.resolve()),
-            'tags_dir': str(TAGS_DIR.resolve()),
-            'backups_dir': str(BACKUPS_DIR.resolve()),
-            'logs_dir': str(LOGS_DIR.resolve()),
-            'modules_mount': modules_mount,
-            'jdbc_mount': jdbc_mount,
-            'secret_mounts': secret_mounts,
-            'data_volume_name': (
-                cfg.data_mount_source if cfg.data_mount_type == 'volume' else None
-            ),
+            'volume_mounts': volume_mounts,
+            'declared_volumes': declared_volumes,
+
         })
         if cfg.activation_token_file:
             context['activation_token_container_path'] = (
@@ -327,7 +412,7 @@ def render_compose(cfg: ComposeConfig) -> Path:
             )
 
         content = template.render(**context)
-        out_path = GENERATED_DIR / 'docker-compose.yml'
+        out_path = target_dir / 'docker-compose.yml'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered compose file to %s", out_path)
         return out_path
@@ -339,11 +424,12 @@ def render_compose(cfg: ComposeConfig) -> Path:
         )
 
 
-def render_env(cfg: ComposeConfig) -> Path:
-    """Render .env file from template."""
+def render_env(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path:
+    """Render .env file from template into the requested output directory."""
 
     try:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        target_dir = output_dir or GENERATED_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
         env = Environment(
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             autoescape=False
@@ -357,7 +443,7 @@ def render_env(cfg: ComposeConfig) -> Path:
             context['license_key_file'] = LICENSE_KEY_CONTAINER_PATH
 
         content = template.render(**context)
-        out_path = GENERATED_DIR / '.env'
+        out_path = target_dir / '.env'
         out_path.write_text(content, encoding='utf-8')
         logger.info("Rendered env file to %s", out_path)
         return out_path

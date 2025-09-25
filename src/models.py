@@ -85,6 +85,8 @@ class ComposeConfig:
     data_mount_source: str = 'ignition-data'
     data_mount_type: Literal['volume', 'bind'] = 'volume'
     data_mount_target: str = '/data'
+    data_mount_local: Optional[Path] = None
+
     modules_dir: Optional[Path] = None
     jdbc_dir: Optional[Path] = None
     gateway_modules_enabled: Optional[str] = None
@@ -139,7 +141,12 @@ class ComposeConfig:
                 f"Invalid data_mount_type '{self.data_mount_type}'. Use 'volume' or 'bind'."
             )
         if self.data_mount_type == 'bind':
-            data_source_path = Path(self.data_mount_source).expanduser()
+            if not self.data_mount_local:
+                raise ValueError(
+                    "Data mount local path must be provided when using a bind mount."
+                )
+            data_source_path = self.data_mount_local
+        
             if not data_source_path.exists():
                 raise FileNotFoundError(
                     f"Data mount source not found: {data_source_path}"
