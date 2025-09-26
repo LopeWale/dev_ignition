@@ -84,6 +84,28 @@ services:
       - wrapper.java.initmemory=512
       - wrapper.ignition.allowunsignedmodules=true
 
+{% if automation_gateway and automation_gateway.enabled %}
+  {{ automation_gateway.service_name }}:
+    image: {{ automation_gateway.image_repo }}:{{ automation_gateway.image_tag }}
+    container_name: {{ automation_gateway.service_name }}
+    restart: unless-stopped
+    depends_on:
+      - ignition-dev
+    environment:
+      GATEWAY_CONFIG: {{ automation_gateway.config_container_path }}
+      GATEWAY_CONFIG_RETRY: 10
+    ports:
+      - "{{ automation_gateway.graphql_port }}:{{ automation_gateway.graphql_port }}"
+      - "{{ automation_gateway.mqtt_port }}:{{ automation_gateway.mqtt_port }}"
+      - "{{ automation_gateway.mqtt_ws_port }}:{{ automation_gateway.mqtt_ws_port }}"
+      - "{{ automation_gateway.opcua_port }}:{{ automation_gateway.opcua_port }}"
+    volumes:
+      - type: bind
+        source: {{ automation_gateway.config_host_path | tojson }}
+        target: {{ automation_gateway.config_container_path | tojson }}
+        read_only: true
+{% endif %}
+
 {% if declared_volumes %}
 volumes:
 {% for name in declared_volumes %}

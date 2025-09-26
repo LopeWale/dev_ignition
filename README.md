@@ -14,6 +14,7 @@ Easily restore backups, import projects and tags, and manage your development en
 - **Load tag exports** (`.json` or `.xml`)
 - **Auto-generate Docker Compose and `.env` files** from GUI inputs
 - **Hardened Docker provisioning** with persistent data volumes, optional module/JDBC mounts, and automatic detection of activation or license secrets
+- **Ship Automation Gateway sidecars** with selectable config templates (default or telemetry-focused) so Ignition sandboxes can stream industrial data without manual YAML editing
 - **Stream and view logs** (gateway + container) in real time
 - **Tear down or purge Docker resources** with one click
 - **Dark-themed, user-friendly PyQt5 interface**

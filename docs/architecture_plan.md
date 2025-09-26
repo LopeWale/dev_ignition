@@ -4,6 +4,7 @@
 - Deliver a unified, browser-based control plane that manages the full SCADA delivery lifecycle (development → testing → staging → production) with an Ignition-first focus.
 - Bridge OT and IT expectations by combining infrastructure-as-code discipline, modern DevOps tooling, and industrial automation domain knowledge.
 - Provide opinionated defaults that follow Ignition container best practices (persistent data volumes, module and driver overlays) while staying extensible for other SCADA platforms in the future.【6b7505†L1-L67】
+- Bundle an industrial data bridge (Automation Gateway fork) as a first-class, hardened sidecar so environments ship with ready-to-use protocol adapters, telemetry exporters, and security guardrails.
 - Prioritise security, auditability, and collaboration across distributed engineering teams.
 
 ## 2. Primary User Personas
@@ -21,7 +22,8 @@
 4. **CI/CD Automation** – Model pipelines that progress artifacts through dev → staging → QA → production with approvals, tests, and change promotion.
 5. **Observability & Monitoring** – Aggregate gateway status, metrics, and logs across all environments; expose dashboards, alerts, and auditing.
 6. **AI Documentation Assistant** – Continuously summarise project changes, update diagrams, and produce audit-ready narratives using LLM tooling.
-7. **Unified Web Interface** – A responsive SPA for managing projects, environments, pipelines, and documentation.
+7. **Industrial Data Bridge** – Package the Automation Gateway fork with Ignition environments to expose OPC UA, PLC4X, and MQTT bridges, stream telemetry into approved sinks, and enforce hardened authentication defaults.
+8. **Unified Web Interface** – A responsive SPA for managing projects, environments, pipelines, documentation, and the data bridge lifecycle.
 
 ## 4. High-Level Architecture
 ```
@@ -67,6 +69,9 @@
   - Model multi-stage pipelines, connect to testing frameworks (unit tests, integration simulations), and enforce promotion gates with manual approvals or automated quality metrics.
 - **Monitoring & Telemetry Aggregator**:
   - Collect metrics/logs from gateways (via REST, system tags, or log streaming), normalize into time-series storage, and trigger alerts.
+- **Automation Gateway Service**:
+  - Ship the maintained Automation Gateway fork as a managed sidecar with pre-vetted drivers, loggers, and GraphQL/MQTT endpoints aligned to Ignition defaults.
+  - Enforce credential validation, network policies, and observability hooks so the data bridge meets the platform's security posture before exposure.
 - **AI Documentation Engine**:
   - Capture configuration snapshots, Git history, test results, and telemetry, then use LLM prompts to generate/update manuals, diagrams, and compliance reports.
 - **Notification & Integration Service**:
@@ -77,6 +82,7 @@
 - **Object Storage (S3 compatible)** for large Ignition exports, gateway backups, diagrams, and generated documents.
 - **Time-Series Database (TimescaleDB, InfluxDB, or VictoriaMetrics)** for gateway KPIs and performance metrics.
 - **Message Bus (NATS/Kafka)** to coordinate pipeline events, environment status updates, and AI processing jobs.
+- **Gateway Configuration Store** (Git-backed or object storage) housing rendered Automation Gateway YAML, certificates, and secrets to keep data bridge deployments reproducible.
 
 ## 7. Deployment and Infrastructure
 - Package services as containers orchestrated by Kubernetes (managed cluster or K3s for on-prem OT sites).
@@ -116,7 +122,8 @@
 2. **Phase 1 – MVP Control Plane** – Ship the first web SPA backed by the new FastAPI service layer with on-demand Docker environments, Git-backed project storage, manual secrets entry, and foundational monitoring widgets.
 3. **Phase 2 – Automated Delivery Tooling** – Introduce pipeline templates, Vault-backed secrets rotation, richer telemetry ingestion, and baseline AI documentation generation tied to deployment events.
 4. **Phase 3 – Intelligent Orchestration** – Add Kubernetes scheduling, predictive analytics, AI-assisted troubleshooting, and a marketplace for reusable orchestration templates.
-5. **Phase 4 – Enterprise & Ecosystem** – Deliver multi-tenant governance, cross-site federation, and extensibility hooks for non-Ignition automation platforms.
+5. **Phase 4 – Industrial Data Bridge Expansion** – Productise the Automation Gateway fork with opinionated recipes, extended protocol coverage, managed sink connectors, and compliance-focused runbooks.
+6. **Phase 5 – Enterprise & Ecosystem** – Deliver multi-tenant governance, cross-site federation, and extensibility hooks for non-Ignition automation platforms.
 
 Refer to [`delivery_phases.md`](delivery_phases.md) for a detailed breakdown of objectives, milestones, and exit criteria for each phase.
 
