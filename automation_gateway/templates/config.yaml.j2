@@ -1,0 +1,61 @@
+# automation_gateway/templates/config.yaml.j2
+#
+# This file is rendered for each Automation Gateway sidecar to provide
+# sensible defaults for development environments managed by dev_ignition.
+# Update the generated file per environment to point at real OPC UA,
+# MQTT, or PLC4X endpoints.
+
+Servers:
+  GraphQL:
+    - Id: GraphQL
+      Enabled: true
+      Port: {{ automation_gateway.graphql_port }}
+      Host: 0.0.0.0
+      GraphiQL: true
+      LogLevel: {{ automation_gateway.log_level }}
+  Mqtt:
+    - Id: MqttTcp
+      Enabled: true
+      Port: {{ automation_gateway.mqtt_port }}
+      Host: 0.0.0.0
+      LogLevel: {{ automation_gateway.log_level }}
+    - Id: MqttWs
+      Enabled: true
+      Port: {{ automation_gateway.mqtt_ws_port }}
+      Host: 0.0.0.0
+      Websocket: true
+      LogLevel: {{ automation_gateway.log_level }}
+  OpcUa:
+    - Id: GatewayOpcUa
+      Enabled: true
+      Port: {{ automation_gateway.opcua_port }}
+      Host: 0.0.0.0
+      LogLevel: {{ automation_gateway.log_level }}
+      Topics:
+        - Topic: opc/unified/#
+
+Drivers:
+  OpcUa:
+    - Id: ignition
+      Enabled: false
+      LogLevel: {{ automation_gateway.log_level }}
+      EndpointUrl: "{{ automation_gateway.ignition_endpoint }}"
+      UpdateEndpointUrl: true
+      SecurityPolicyUri: http://opcfoundation.org/UA/SecurityPolicy#None
+      KeepAliveFailuresAllowed: 0
+      SubscriptionSamplingInterval: 0.0
+      # UsernameProvider:
+      #   Username: opcuauser
+      #   Password: strong-password
+
+Schemas:
+  - System: unified
+    Enabled: true
+    FieldName: DisplayName
+    Sources:
+      - System: ignition
+        RootNodes:
+          - "ns=1;s=2|Tags"
+
+# Generated for Ignition gateway "{{ gateway_name }}". Adjust driver and
+# logger definitions before moving beyond local development.

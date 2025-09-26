@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, Literal
+from typing import Optional, Literal, ClassVar
 
 @dataclass
 class Backup:
@@ -62,6 +62,79 @@ class TagFile:
         if not self.path.is_file():
             raise FileNotFoundError(f"Tag file not found: {self.path}")
 
+
+@dataclass
+class AutomationGatewayConfig:
+    """Runtime settings for the Automation Gateway sidecar."""
+
+    SUPPORTED_TEMPLATES: ClassVar[set[str]] = {"default"}
+
+    enabled: bool = False
+    image_repo: str = "rocworks/automation-gateway"
+    image_tag: str = "latest"
+    graphql_port: int = 4001
+    mqtt_port: int = 1883
+    mqtt_ws_port: int = 1884
+    opcua_port: int = 4841
+    log_level: str = "INFO"
+    config_template: str = "default"
+    ignition_endpoint: str = "opc.tcp://ignition-dev:62541/discovery"
+    config_container_path: str = "/app/config.yaml"
+    config_file_name: str = "config.yaml"
+    config_source: Optional[Path] = None
+    config_host_path: Optional[Path] = None
+
+    def validate(self) -> None:
+        if not self.enabled:
+            return
+
+        for port, label in (
+            (self.graphql_port, "GraphQL"),
+            (self.mqtt_port, "MQTT"),
+            (self.mqtt_ws_port, "MQTT WebSocket"),
+            (self.opcua_port, "OPC UA"),
+        ):
+            if not (1 <= port <= 65535):
+                raise ValueError(
+                    f"Automation Gateway {label} port {port} is out of range (1-65535)"
+                )
+
+        if not self.image_repo:
+            raise ValueError("Automation Gateway image repository cannot be empty.")
+        if not self.image_tag:
+            raise ValueError("Automation Gateway image tag cannot be empty.")
+        if not self.log_level:
+            raise ValueError("Automation Gateway log level cannot be empty.")
+        if not self.ignition_endpoint:
+            raise ValueError("Automation Gateway Ignition endpoint cannot be empty.")
+
+        template = self.config_template.strip()
+        if template and template not in self.SUPPORTED_TEMPLATES and self.config_source is None:
+            raise ValueError(
+                f"Unsupported Automation Gateway config template '{self.config_template}'."
+            )
+
+        if self.config_source and not self.config_source.is_file():
+            raise FileNotFoundError(
+                f"Automation Gateway config source not found: {self.config_source}"
+            )
+
+    def to_template_dict(self) -> dict:
+        return {
+            'enabled': self.enabled,
+            'image_repo': self.image_repo,
+            'image_tag': self.image_tag,
+            'graphql_port': self.graphql_port,
+            'mqtt_port': self.mqtt_port,
+            'mqtt_ws_port': self.mqtt_ws_port,
+            'opcua_port': self.opcua_port,
+            'log_level': self.log_level,
+            'config_template': self.config_template,
+            'ignition_endpoint': self.ignition_endpoint,
+            'config_container_path': self.config_container_path,
+            'config_file_name': self.config_file_name,
+        }
+
 @dataclass
 class ComposeConfig:
     mode: Literal['clean', 'backup']
@@ -95,6 +168,7 @@ class ComposeConfig:
     ignition_gid: Optional[int] = None
     activation_token_file: Optional[Path] = None
     license_key_file: Optional[Path] = None
+    automation_gateway: Optional[AutomationGatewayConfig] = None
 
     def validate(self) -> None:
         """
@@ -173,6 +247,9 @@ class ComposeConfig:
             if value is not None and value < 0:
                 raise ValueError(f"{label} must be a positive integer.")
 
+        if self.automation_gateway:
+            self.automation_gateway.validate()
+
     def to_dict(self) -> dict:
         """
         Serialize config for templating.
@@ -211,4 +288,6 @@ class ComposeConfig:
             data['modules_dir'] = str(self.modules_dir)
         if self.jdbc_dir:
             data['jdbc_dir'] = str(self.jdbc_dir)
+        if self.automation_gateway:
+            data['automation_gateway'] = self.automation_gateway.to_template_dict()
         return data
