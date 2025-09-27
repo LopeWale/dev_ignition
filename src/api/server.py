@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 from typing import Optional
+
 from fastapi import FastAPI
-from api.routes import get_environment_router
-from services import EnvironmentService
+
+from api.routes import get_automation_gateway_router, get_environment_router
+from services import AutomationGatewayService, EnvironmentService
 
 
-def create_app(environment_service: Optional[EnvironmentService] = None) -> FastAPI:
+def create_app(
+    environment_service: Optional[EnvironmentService] = None,
+    automation_gateway_service: Optional[AutomationGatewayService] = None,
+) -> FastAPI:
 
     """Instantiate the FastAPI application."""
 
@@ -20,8 +25,14 @@ def create_app(environment_service: Optional[EnvironmentService] = None) -> Fast
     )
 
     environment_service = environment_service or EnvironmentService()
+    automation_gateway_service = automation_gateway_service or AutomationGatewayService()
+
     app.state.environment_service = environment_service
+    app.state.automation_gateway_service = automation_gateway_service
     app.include_router(get_environment_router(environment_service), prefix="/api")
+    app.include_router(
+        get_automation_gateway_router(automation_gateway_service), prefix="/api"
+    )
 
     @app.get("/healthz", tags=["system"], summary="Liveness probe")
     def healthcheck() -> dict[str, str]:

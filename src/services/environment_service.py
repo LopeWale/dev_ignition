@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
-from compose_generator import build_config, render_compose, render_env
+from compose_generator import (
+    build_config,
+    render_automation_gateway_config,
+    render_compose,
+    render_env,
+)
 from docker_manager import DockerManager, DockerManagerError
 from paths import BACKUPS_DIR, BASE_DIR, GENERATED_DIR, PROJECTS_DIR, TAGS_DIR
 
@@ -190,6 +195,7 @@ class EnvironmentService:
             env_dir.mkdir(parents=True, exist_ok=True)
             compose_path = render_compose(cfg, output_dir=env_dir)
             env_path = render_env(cfg, output_dir=env_dir)
+            render_automation_gateway_config(cfg, output_dir=env_dir)
 
             record = EnvironmentRecord(
                 id=env_id,
@@ -417,6 +423,30 @@ class EnvironmentService:
             "project_name": cfg.project.name if cfg.project else None,
             "tag_name": cfg.tag_file.name if cfg.tag_file else None,
             "backup_name": cfg.backup.name if cfg.backup else None,
+            "automation_gateway": self._automation_gateway_snapshot(cfg),
+        }
+
+    def _automation_gateway_snapshot(
+        self, cfg: ComposeConfig
+    ) -> Optional[Dict[str, Any]]:
+        if not cfg.automation_gateway:
+            return None
+
+        ag = cfg.automation_gateway
+        return {
+            "enabled": ag.enabled,
+            "image_repo": ag.image_repo,
+            "image_tag": ag.image_tag,
+            "graphql_port": ag.graphql_port,
+            "mqtt_port": ag.mqtt_port,
+            "mqtt_ws_port": ag.mqtt_ws_port,
+            "opcua_port": ag.opcua_port,
+            "log_level": ag.log_level,
+            "ignition_endpoint": ag.ignition_endpoint,
+            "config_template": ag.config_template,
+            "config_source": _stringify_optional_path(ag.config_source),
+            "config_file": _stringify_optional_path(ag.config_host_path),
+            "config_container_path": ag.config_container_path,
         }
 
     def _default_docker_manager_factory(

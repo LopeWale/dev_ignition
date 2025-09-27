@@ -81,6 +81,37 @@ class EnvironmentCreate(BaseModel):
     ignition_gid: Optional[int] = Field(default=None, ge=0)
     activation_token_file: Optional[str] = Field(default=None, max_length=500)
     license_key_file: Optional[str] = Field(default=None, max_length=500)
+    automation_gateway_enabled: bool = Field(default=False)
+    automation_gateway_image_repo: Optional[str] = Field(
+        default="rocworks/automation-gateway", max_length=255
+    )
+    automation_gateway_image_tag: Optional[str] = Field(
+        default="latest", max_length=128
+    )
+    automation_gateway_graphql_port: Optional[int] = Field(
+        default=4001, ge=1, le=65535
+    )
+    automation_gateway_mqtt_port: Optional[int] = Field(
+        default=1883, ge=1, le=65535
+    )
+    automation_gateway_mqtt_ws_port: Optional[int] = Field(
+        default=1884, ge=1, le=65535
+    )
+    automation_gateway_opcua_port: Optional[int] = Field(
+        default=4841, ge=1, le=65535
+    )
+    automation_gateway_log_level: Optional[str] = Field(
+        default="INFO", max_length=64
+    )
+    automation_gateway_config_template: Optional[str] = Field(
+        default="default", max_length=128
+    )
+    automation_gateway_config_source: Optional[str] = Field(
+        default=None, max_length=500
+    )
+    automation_gateway_ignition_endpoint: Optional[str] = Field(
+        default="opc.tcp://ignition-dev:62541/discovery", max_length=500
+    )
 
     @field_validator(
         "display_name",
@@ -94,6 +125,12 @@ class EnvironmentCreate(BaseModel):
         "com_port",
         "activation_token_file",
         "license_key_file",
+        "automation_gateway_image_repo",
+        "automation_gateway_image_tag",
+        "automation_gateway_log_level",
+        "automation_gateway_config_template",
+        "automation_gateway_config_source",
+        "automation_gateway_ignition_endpoint",
         mode="before",
     )
     @classmethod
@@ -113,6 +150,11 @@ class EnvironmentCreate(BaseModel):
         "image_repo",
         "image_tag",
         "data_mount_target",
+        "automation_gateway_image_repo",
+        "automation_gateway_image_tag",
+        "automation_gateway_log_level",
+        "automation_gateway_config_template",
+        "automation_gateway_ignition_endpoint",
         mode="before",
     )
     @classmethod
@@ -225,8 +267,60 @@ class EnvironmentCreate(BaseModel):
             "backups_dir": backups_dir,
             "projects_dir": projects_dir,
             "tags_dir": tags_dir,
+            "automation_gateway_enabled": self.automation_gateway_enabled,
+            "automation_gateway_image_repo": self.automation_gateway_image_repo,
+            "automation_gateway_image_tag": self.automation_gateway_image_tag,
+            "automation_gateway_graphql_port": self.automation_gateway_graphql_port,
+            "automation_gateway_mqtt_port": self.automation_gateway_mqtt_port,
+            "automation_gateway_mqtt_ws_port": self.automation_gateway_mqtt_ws_port,
+            "automation_gateway_opcua_port": self.automation_gateway_opcua_port,
+            "automation_gateway_log_level": self.automation_gateway_log_level,
+            "automation_gateway_config_template": self.automation_gateway_config_template,
+            "automation_gateway_config_source": self.automation_gateway_config_source,
+            "automation_gateway_ignition_endpoint": self.automation_gateway_ignition_endpoint,
         }
         return raw
+
+
+class AutomationGatewaySnapshot(BaseModel):
+    """Details about the Automation Gateway sidecar when configured."""
+
+    enabled: bool
+    image_repo: Optional[str]
+    image_tag: Optional[str]
+    graphql_port: Optional[int]
+    mqtt_port: Optional[int]
+    mqtt_ws_port: Optional[int]
+    opcua_port: Optional[int]
+    log_level: Optional[str]
+    ignition_endpoint: Optional[str]
+    config_template: Optional[str]
+    config_source: Optional[str]
+    config_file: Optional[str]
+    config_container_path: Optional[str]
+
+
+class AutomationGatewayTemplate(BaseModel):
+    """Metadata describing an Automation Gateway configuration template."""
+
+    name: str
+    filename: str
+    exists: bool
+    relative_path: Optional[str] = Field(default=None)
+    description: Optional[str] = Field(default=None)
+    is_default: bool = Field(default=False)
+
+
+class AutomationGatewayTemplateDetail(AutomationGatewayTemplate):
+    """Full template metadata including the template body."""
+
+    content: str
+
+
+class AutomationGatewayTemplateList(BaseModel):
+    """Wrapper for returning Automation Gateway templates."""
+
+    items: List[AutomationGatewayTemplate]
 
 
 class EnvironmentConfigSnapshot(BaseModel):
@@ -262,6 +356,7 @@ class EnvironmentConfigSnapshot(BaseModel):
     project_name: Optional[str]
     tag_name: Optional[str]
     backup_name: Optional[str]
+    automation_gateway: Optional[AutomationGatewaySnapshot] = None
 
 
 class EnvironmentSummary(BaseModel):
