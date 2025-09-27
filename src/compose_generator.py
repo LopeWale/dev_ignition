@@ -1,12 +1,15 @@
 import logging
+import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from errors import ConfigBuildError
-from models import Backup, ComposeConfig, Project, TagFile
+from models import AutomationGatewayConfig, Backup, ComposeConfig, Project, TagFile
 from paths import (
+    AUTOMATION_GATEWAY_CONFIGS_DIR,
+    AUTOMATION_GATEWAY_TEMPLATES_DIR,
     BACKUPS_DIR,
     GENERATED_DIR,
     JDBC_DIR,
@@ -82,6 +85,15 @@ def _resolve_optional_path(path_value: Optional[str]) -> Optional[Path]:
     if not path_value:
         return None
     return Path(path_value).expanduser().resolve()
+
+
+def _resolve_gateway_config_source(path_value: Optional[str]) -> Optional[Path]:
+    if not path_value:
+        return None
+    candidate = Path(path_value).expanduser()
+    if not candidate.is_absolute():
+        candidate = AUTOMATION_GATEWAY_CONFIGS_DIR / candidate
+    return candidate.resolve()
 
 
 def _detect_default_secret(relative_name: str) -> Optional[Path]:
@@ -241,6 +253,55 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             or _detect_default_secret('license-key')
         )
 
+        automation_gateway: Optional[AutomationGatewayConfig] = None
+        if _parse_bool(raw.get('automation_gateway_enabled')):
+            ag_image_repo = (raw.get('automation_gateway_image_repo') or 'rocworks/automation-gateway').strip() or 'rocworks/automation-gateway'
+            ag_image_tag = (raw.get('automation_gateway_image_tag') or 'latest').strip() or 'latest'
+
+            graphql_port = _parse_optional_int(
+                raw.get('automation_gateway_graphql_port'),
+                'Automation Gateway GraphQL port',
+            )
+            mqtt_port = _parse_optional_int(
+                raw.get('automation_gateway_mqtt_port'),
+                'Automation Gateway MQTT port',
+            )
+            mqtt_ws_port = _parse_optional_int(
+                raw.get('automation_gateway_mqtt_ws_port'),
+                'Automation Gateway MQTT WebSocket port',
+            )
+            opcua_port = _parse_optional_int(
+                raw.get('automation_gateway_opcua_port'),
+                'Automation Gateway OPC UA port',
+            )
+
+            log_level = (raw.get('automation_gateway_log_level') or 'INFO').strip() or 'INFO'
+            config_template = (raw.get('automation_gateway_config_template') or 'default').strip() or 'default'
+            ignition_endpoint = (raw.get('automation_gateway_ignition_endpoint') or 'opc.tcp://ignition-dev:62541/discovery').strip()
+            config_source = _resolve_gateway_config_source(
+                raw.get('automation_gateway_config_source')
+            )
+
+            automation_gateway = AutomationGatewayConfig(
+                enabled=True,
+                image_repo=ag_image_repo,
+                image_tag=ag_image_tag,
+                graphql_port=graphql_port or 4001,
+                mqtt_port=mqtt_port or 1883,
+                mqtt_ws_port=mqtt_ws_port or 1884,
+                opcua_port=opcua_port or 4841,
+                log_level=log_level,
+                config_template=config_template,
+                ignition_endpoint=ignition_endpoint,
+                config_source=config_source,
+            )
+
+            logger.info(
+                "Automation Gateway enabled with image %s:%s",
+                automation_gateway.image_repo,
+                automation_gateway.image_tag,
+            )
+
         gateway_modules_enabled = (
             raw.get('gateway_modules_enabled')
             or raw.get('modules_enabled')
@@ -290,6 +351,7 @@ def build_config(raw: Dict[str, str]) -> ComposeConfig:
             ignition_gid=ignition_gid,
             activation_token_file=activation_token_file,
             license_key_file=license_key_file,
+            automation_gateway=automation_gateway,
         )
         cfg.validate()
         logger.info("Successfully built ComposeConfig: %s", cfg)
@@ -315,6 +377,32 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
         template = env.get_template('docker-compose.yml.j2')
 
         context = cfg.to_dict()
+
+        automation_gateway_ctx: Optional[Dict[str, object]] = None
+        if cfg.automation_gateway and cfg.automation_gateway.enabled:
+            ag_dir = target_dir / 'automation-gateway'
+            ag_dir.mkdir(parents=True, exist_ok=True)
+
+            config_host_path = ag_dir / cfg.automation_gateway.config_file_name
+            cfg.automation_gateway.config_host_path = config_host_path
+
+            automation_gateway_ctx = {
+                'service_name': 'automation-gateway',
+                'image_repo': cfg.automation_gateway.image_repo,
+                'image_tag': cfg.automation_gateway.image_tag,
+                'config_host_path': _compose_host_path(config_host_path),
+                'config_container_path': cfg.automation_gateway.config_container_path,
+                'graphql_port': cfg.automation_gateway.graphql_port,
+                'mqtt_port': cfg.automation_gateway.mqtt_port,
+                'mqtt_ws_port': cfg.automation_gateway.mqtt_ws_port,
+                'opcua_port': cfg.automation_gateway.opcua_port,
+                'log_level': cfg.automation_gateway.log_level,
+            }
+
+            if cfg.automation_gateway.config_source:
+                automation_gateway_ctx['config_source'] = _compose_host_path(
+                    cfg.automation_gateway.config_source
+                )
 
         modules_mount = _prepare_mount_dir(
             cfg.modules_dir,
@@ -394,6 +482,10 @@ def render_compose(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> 
             'volume_mounts': volume_mounts,
             'declared_volumes': declared_volumes,
         })
+        if automation_gateway_ctx:
+            base_ag = context.get('automation_gateway', {}) or {}
+            base_ag.update(automation_gateway_ctx)
+            context['automation_gateway'] = base_ag
         if cfg.activation_token_file:
             context['activation_token_container_path'] = (
                 ACTIVATION_TOKEN_CONTAINER_PATH
@@ -445,6 +537,63 @@ def render_env(cfg: ComposeConfig, *, output_dir: Optional[Path] = None) -> Path
         raise ConfigBuildError(
             f"Env template rendering error: {e}", underlying=e
         )
+
+
+def render_automation_gateway_config(
+    cfg: ComposeConfig, *, output_dir: Optional[Path] = None
+) -> Optional[Path]:
+    """Render or copy the Automation Gateway configuration file."""
+
+    if not cfg.automation_gateway or not cfg.automation_gateway.enabled:
+        return None
+
+    try:
+        target_dir = output_dir or GENERATED_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        config_path = cfg.automation_gateway.config_host_path
+        if config_path is None:
+            config_dir = target_dir / 'automation-gateway'
+            config_dir.mkdir(parents=True, exist_ok=True)
+            config_path = config_dir / cfg.automation_gateway.config_file_name
+            cfg.automation_gateway.config_host_path = config_path
+        else:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if cfg.automation_gateway.config_source:
+            shutil.copyfile(cfg.automation_gateway.config_source, config_path)
+            logger.info(
+                "Copied Automation Gateway config from %s to %s",
+                cfg.automation_gateway.config_source,
+                config_path,
+            )
+        else:
+            env = Environment(
+                loader=FileSystemLoader(str(AUTOMATION_GATEWAY_TEMPLATES_DIR)),
+                autoescape=False,
+            )
+            template = env.get_template(cfg.automation_gateway.template_filename())
+            content = template.render(
+                automation_gateway={
+                    'graphql_port': cfg.automation_gateway.graphql_port,
+                    'mqtt_port': cfg.automation_gateway.mqtt_port,
+                    'mqtt_ws_port': cfg.automation_gateway.mqtt_ws_port,
+                    'opcua_port': cfg.automation_gateway.opcua_port,
+                    'log_level': cfg.automation_gateway.log_level,
+                    'ignition_endpoint': cfg.automation_gateway.ignition_endpoint,
+                },
+                gateway_name=cfg.gateway_name,
+            )
+            config_path.write_text(content, encoding='utf-8')
+            logger.info("Rendered Automation Gateway config to %s", config_path)
+
+        return config_path
+
+    except Exception as e:  # pragma: no cover - defensive logging
+        logger.exception("Failed to render Automation Gateway configuration")
+        raise ConfigBuildError(
+            f"Automation Gateway config rendering error: {e}", underlying=e
+        ) from e
 
 
 def cleanup_generated_files() -> None:

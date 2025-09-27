@@ -14,6 +14,7 @@ Easily restore backups, import projects and tags, and manage your development en
 - **Load tag exports** (`.json` or `.xml`)
 - **Auto-generate Docker Compose and `.env` files** from GUI inputs
 - **Hardened Docker provisioning** with persistent data volumes, optional module/JDBC mounts, and automatic detection of activation or license secrets
+- **Ship Automation Gateway sidecars** with selectable config templates (default or telemetry-focused) so Ignition sandboxes can stream industrial data without manual YAML editing
 - **Stream and view logs** (gateway + container) in real time
 - **Tear down or purge Docker resources** with one click
 - **Dark-themed, user-friendly PyQt5 interface**
@@ -96,6 +97,8 @@ The groundwork for the future web application now includes a FastAPI-powered ser
    - `POST /api/environments/{id}/actions/start` – launch the generated stack (optionally waiting for the gateway health check).
    - `POST /api/environments/{id}/actions/stop` – tear down the stack and mark the environment as stopped.
    - `DELETE /api/environments/{id}` – remove generated artifacts for a retired environment.
+   - `GET /api/automation-gateway/templates` – inspect available Automation Gateway configuration templates exposed by the control plane.
+   - `GET /api/automation-gateway/templates/{name}` – retrieve the selected template’s metadata and body for UI preview workflows.
 
 Environment records track lifecycle status (`created`, `running`, `stopped`, `error`, etc.) alongside timestamps for the most
 recent start/stop events so the upcoming SPA can surface stateful controls.

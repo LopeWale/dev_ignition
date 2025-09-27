@@ -1,0 +1,24 @@
+# automation_gateway/templates/telemetry.yaml.j2
+#
+# Alternative template highlighting telemetry-focused defaults for Automation Gateway.
+# Provides a minimal server configuration suitable for streaming into MQTT.
+
+Servers:
+  Mqtt:
+    - Id: MqttTelemetry
+      Enabled: true
+      Port: {{ automation_gateway.mqtt_port }}
+      Host: 0.0.0.0
+      LogLevel: {{ automation_gateway.log_level }}
+      Retain: false
+      Websocket: false
+
+Drivers:
+  OpcUa:
+    - Id: ignition
+      Enabled: false
+      LogLevel: {{ automation_gateway.log_level }}
+      EndpointUrl: "{{ automation_gateway.ignition_endpoint }}"
+      SecurityPolicyUri: http://opcfoundation.org/UA/SecurityPolicy#None
+
+# Generated for Ignition gateway "{{ gateway_name }}" using the telemetry template.
