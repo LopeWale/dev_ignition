@@ -6,9 +6,9 @@ import shutil
 import sys
 from pathlib import Path
 
+import httpx
 import pytest
 import yaml
-from fastapi.testclient import TestClient
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT_DIR / "src"
@@ -19,9 +19,12 @@ from api import create_app
 from services import EnvironmentService
 from paths import GENERATED_DIR
 
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:The 'app' shortcut is now deprecated:DeprecationWarning:httpx._client"
-)
+pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +46,7 @@ def _resolve_path(path_text: str) -> Path:
     return path
 
 
-def test_environment_lifecycle(tmp_path):
+async def test_environment_lifecycle(tmp_path):
     app = create_app()
 
     payload = {
@@ -61,8 +64,11 @@ def test_environment_lifecycle(tmp_path):
         "data_mount_type": "volume",
     }
 
-    with TestClient(app) as client:
-        response = client.post("/api/environments", json=payload)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver", trust_env=False
+    ) as client:
+        response = await client.post("/api/environments", json=payload)
         assert response.status_code == 201, response.text
         created = response.json()
 
@@ -81,14 +87,14 @@ def test_environment_lifecycle(tmp_path):
         assert compose_path.exists()
         assert env_file.exists()
 
-        list_response = client.get("/api/environments")
+        list_response = await client.get("/api/environments")
         assert list_response.status_code == 200
         listing = list_response.json()
         assert listing["items"][0]["id"] == env_id
         assert listing["items"][0]["status"] == "created"
 
 
-        detail_response = client.get(f"/api/environments/{env_id}")
+        detail_response = await client.get(f"/api/environments/{env_id}")
         assert detail_response.status_code == 200
         detail = detail_response.json()
         assert detail["id"] == env_id
@@ -97,16 +103,16 @@ def test_environment_lifecycle(tmp_path):
         assert detail["config"]["automation_gateway"] is None
 
 
-        delete_response = client.delete(f"/api/environments/{env_id}")
+        delete_response = await client.delete(f"/api/environments/{env_id}")
         assert delete_response.status_code == 204
 
-        missing = client.get(f"/api/environments/{env_id}")
+        missing = await client.get(f"/api/environments/{env_id}")
         assert missing.status_code == 404
 
     assert not compose_path.exists()
     assert not env_file.exists()
 
-def test_environment_start_stop(tmp_path):
+async def test_environment_start_stop(tmp_path):
     class DummyManager:
         def __init__(self, compose_file, env_file):
             self.compose_file = compose_file
@@ -150,11 +156,14 @@ def test_environment_start_stop(tmp_path):
         "data_mount_type": "volume",
     }
 
-    with TestClient(app) as client:
-        create_response = client.post("/api/environments", json=payload)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver", trust_env=False
+    ) as client:
+        create_response = await client.post("/api/environments", json=payload)
         env_id = create_response.json()["id"]
 
-        start_response = client.post(
+        start_response = await client.post(
             f"/api/environments/{env_id}/actions/start",
             params={"wait": True},
         )
@@ -167,7 +176,9 @@ def test_environment_start_stop(tmp_path):
         assert managers[0].up_calls == 1
         assert managers[0].wait_calls == [(8090, 60)]
 
-        stop_response = client.post(f"/api/environments/{env_id}/actions/stop")
+        stop_response = await client.post(
+            f"/api/environments/{env_id}/actions/stop"
+        )
         assert stop_response.status_code == 200
         stopped = stop_response.json()
         assert stopped["status"] == "stopped"
@@ -177,7 +188,7 @@ def test_environment_start_stop(tmp_path):
         assert managers[-1].down_calls == 1
 
 
-def test_environment_with_automation_gateway(tmp_path):
+async def test_environment_with_automation_gateway(tmp_path):
     app = create_app()
 
     payload = {
@@ -200,8 +211,11 @@ def test_environment_with_automation_gateway(tmp_path):
         "automation_gateway_opcua_port": 4850,
     }
 
-    with TestClient(app) as client:
-        response = client.post("/api/environments", json=payload)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver", trust_env=False
+    ) as client:
+        response = await client.post("/api/environments", json=payload)
         assert response.status_code == 201, response.text
         created = response.json()
 
